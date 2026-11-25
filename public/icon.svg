@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="拾焰">
+  <rect width="512" height="512" fill="#f3eee3"/>
+  <rect x="46" y="46" width="420" height="420" rx="94" fill="#b23e27"/>
+  <rect x="74" y="74" width="364" height="364" rx="70" fill="none" stroke="#f3eee3" stroke-opacity=".32" stroke-width="2"/>
+  <path fill="#f8f1e4" d="M257 112c6 47-37 81-37 134 0 48 31 80 77 80 44 0 73-32 73-76 0-34-19-61-41-85 2 34-13 57-35 67 4-42-11-88-37-120Z"/>
+  <path fill="#b23e27" d="M280 199c-4 25-20 38-20 59 0 20 15 36 38 36 25 0 41-16 41-39 0-20-11-37-23-50 1 17-5 31-15 36 3-16-5-31-21-42Z"/>
+  <circle cx="356" cy="139" r="8" fill="#d09863" opacity=".9"/>
+</svg>

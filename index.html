@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="description" content="拾焰 · 把一闪而过的念，燃成做成的事。一个完全本地优先的念头、目标与行动手记。" />
+    <meta name="theme-color" content="#f3eee3" id="theme-color-meta" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="format-detection" content="telephone=no" />
+    <meta name="referrer" content="no-referrer" />
+    <meta name="application-name" content="拾焰" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="拾焰 · 念行手记" />
+    <meta property="og:description" content="把一闪而过的念，燃成做成的事。一个完全本地优先的念头、目标与行动手记。" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="拾焰" />
+    <link rel="icon" type="image/svg+xml" href="./icon.svg" />
+    <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
+    <title>拾焰 · 念行手记</title>
+    <style>
+      html {
+        background: #f3eee3;
+        color-scheme: light;
+      }
+      html[data-theme='dark'] {
+        background: #17150f;
+        color-scheme: dark;
+      }
+      body {
+        margin: 0;
+        min-height: 100dvh;
+        background: #f3eee3;
+        color: #201e19;
+        font-family: 'Avenir Next', 'PingFang SC', 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
+      }
+      html[data-theme='dark'] body {
+        background: #17150f;
+        color: #eee7d9;
+      }
+      .boot-screen {
+        min-height: 100dvh;
+        display: grid;
+        place-content: center;
+        justify-items: center;
+        gap: 15px;
+      }
+      .boot-seal {
+        display: grid;
+        place-items: center;
+        width: 58px;
+        height: 58px;
+        border: 1px solid #b23e27;
+        color: #b23e27;
+        font-family: 'Songti SC', 'STSong', 'Noto Serif SC', 'SimSun', serif;
+        font-size: 30px;
+        line-height: 1;
+        transform: rotate(-2deg);
+      }
+      html[data-theme='dark'] .boot-seal {
+        border-color: #d75b3c;
+        color: #d75b3c;
+      }
+      .boot-word {
+        margin: 0;
+        font-family: 'Songti SC', 'STSong', 'Noto Serif SC', 'SimSun', serif;
+        font-size: 15px;
+        letter-spacing: 0.5em;
+        padding-left: 0.5em;
+        color: #555045;
+      }
+      html[data-theme='dark'] .boot-word {
+        color: #b6ad9b;
+      }
+      .boot-line {
+        display: block;
+        width: 34px;
+        height: 1px;
+        background: #b23e27;
+        transform-origin: left center;
+        animation: bootLine 1.6s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+      }
+      @keyframes bootLine {
+        0%,
+        100% {
+          transform: scaleX(0.25);
+          opacity: 0.4;
+        }
+        50% {
+          transform: scaleX(1);
+          opacity: 1;
+        }
+      }
+      .noscript {
+        padding: 24px;
+        font-family: 'Songti SC', 'STSong', serif;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .boot-line {
+          animation: none;
+        }
+      }
+    </style>
+    <script>
+      ;(() => {
+        try {
+          const mode = localStorage.getItem('shiyan:theme') || 'system'
+          const dark =
+            mode === 'dark' ||
+            (mode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+          document.documentElement.dataset.theme = dark ? 'dark' : 'light'
+          document.documentElement.style.colorScheme = dark ? 'dark' : 'light'
+          document.querySelector('#theme-color-meta')?.setAttribute('content', dark ? '#171612' : '#f3eee3')
+        } catch {
+          /* The app will set the theme after boot. */
+        }
+      })()
+    </script>
+  </head>
+  <body>
+    <div id="root">
+      <div class="boot-screen" aria-label="拾焰正在打开">
+        <div class="boot-seal">焰</div>
+        <p class="boot-word">拾焰</p>
+        <span class="boot-line"></span>
+      </div>
+    </div>
+    <noscript>
+      <div class="noscript">
+        <p>拾焰需要 JavaScript 才能把念头留在你的设备上。</p>
+      </div>
+    </noscript>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

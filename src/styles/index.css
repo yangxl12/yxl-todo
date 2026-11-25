@@ -1,0 +1,20 @@
+@import './tokens.css';
+@import './base.css';
+@import './layout.css';
+@import './components.css';
+@import './dialogs.css';
+@import './ideas.css';
+@import './goals.css';
+@import './fire.css';
+
+@media (pointer: coarse) {
+  .tag-input-row input,
+  .search-bar input,
+  .text-field,
+  .textarea-field,
+  .date-field,
+  .secret-field input,
+  .task-add input {
+    font-size: 16px;
+  }
+}

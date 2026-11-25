@@ -1,0 +1,500 @@
+import { useEffect, useRef, useState } from 'react'
+import { DeepSeekError as DeepSeekRequestError, polishText, type TokenUsage } from '../../lib/deepseek'
+import { useApp } from '../../lib/store'
+import type { PolishMode } from '../../lib/deepseek'
+import { Button, IconButton } from '../../components/Button'
+import { Sheet } from '../../components/Modal'
+import { Icon } from '../../components/Icon'
+import { cx, cleanAiText, formatNumber } from '../../lib/utils'
+
+interface AiPolishSheetProps {
+  open: boolean
+  onClose: () => void
+  sourceText: string
+  onApply: (text: string) => void
+  contextLabel?: string
+}
+
+type RunState = 'idle' | 'running' | 'done' | 'stopped' | 'error'
+
+const MODES: Array<{ value: PolishMode; label: string; hint: string }> = [
+  { value: 'clear', label: '理顺', hint: '顺一顺，保留原声' },
+  { value: 'concise', label: '收紧', hint: '删冗长，更有力' },
+  { value: 'literary', label: '添彩', hint: '添一点画面与节奏' },
+]
+
+function modeName(mode: PolishMode): string {
+  return MODES.find((item) => item.value === mode)?.label ?? '理顺'
+}
+
+function usageLine(usage: TokenUsage | null): string | null {
+  if (!usage) return null
+  const parts = [`${formatNumber(usage.totalTokens)} tokens`]
+  if (usage.reasoningTokens) parts.push(`思考 ${formatNumber(usage.reasoningTokens)}`)
+  if (usage.promptTokens > 0 && usage.cacheHitTokens > 0) {
+    parts.push(`缓存 ${Math.round((usage.cacheHitTokens / usage.promptTokens) * 100)}%`)
+  }
+  return parts.join(' · ')
+}
+
+async function writeClipboard(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text)
+    return true
+  } catch {
+    return false
+  }
+}
+
+export function AiPolishSheet({
+  open,
+  onClose,
+  sourceText,
+  onApply,
+  contextLabel = '正在润色这则念头',
+}: AiPolishSheetProps) {
+  const { data, dispatch } = useApp()
+  const [mode, setMode] = useState<PolishMode>('clear')
+  const [thinking, setThinking] = useState(false)
+  const [runState, setRunState] = useState<RunState>('idle')
+  const [content, setContent] = useState('')
+  const [reasoning, setReasoning] = useState('')
+  const [usage, setUsage] = useState<TokenUsage | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [finishReason, setFinishReason] = useState<string | null>(null)
+  const [keyDraft, setKeyDraft] = useState('')
+  const [keyEditing, setKeyEditing] = useState(false)
+  const [showKey, setShowKey] = useState(false)
+  const [showReasoning, setShowReasoning] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const [showOriginal, setShowOriginal] = useState(false)
+  const [errorKind, setErrorKind] = useState<DeepSeekRequestError['kind'] | null>(null)
+  const abortRef = useRef<AbortController | null>(null)
+  const outputRef = useRef<HTMLDivElement>(null)
+  const wasOpen = useRef(false)
+
+  const apiKey = data.prefs.apiKey
+  const hasKey = Boolean(apiKey)
+
+  useEffect(() => {
+    if (open && !wasOpen.current) {
+      setMode('clear')
+      setThinking(false)
+      setRunState('idle')
+      setContent('')
+      setReasoning('')
+      setUsage(null)
+      setError(null)
+      setFinishReason(null)
+      setKeyDraft('')
+      setKeyEditing(false)
+      setErrorKind(null)
+      setShowReasoning(false)
+      setCopied(false)
+      setShowOriginal(false)
+    }
+    wasOpen.current = open
+  }, [open])
+
+  useEffect(() => {
+    if (!open) {
+      abortRef.current?.abort()
+      abortRef.current = null
+    }
+  }, [open])
+
+  useEffect(
+    () => () => {
+      abortRef.current?.abort()
+    },
+    [],
+  )
+
+  useEffect(() => {
+    if (runState !== 'running') return
+    const node = outputRef.current
+    if (!node) return
+    const nearBottom = node.scrollHeight - node.scrollTop - node.clientHeight < 100
+    if (nearBottom) node.scrollTop = node.scrollHeight
+  }, [content, runState])
+
+  const start = async (keyOverride?: string) => {
+    const useDraft = keyEditing || !hasKey
+    const key = (keyOverride ?? (useDraft ? keyDraft : apiKey)).trim()
+    if (!key) {
+      setError('先填入 DeepSeek API Key，密钥只会留在这台设备。')
+      setErrorKind('auth')
+      return
+    }
+    if (!sourceText.trim()) {
+      setError('这则念头还是空的，先写一点再润色。')
+      return
+    }
+
+    if (key !== apiKey) {
+      dispatch({ type: 'prefs/update', patch: { apiKey: key } })
+    }
+    if (keyEditing) setKeyEditing(false)
+
+    abortRef.current?.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
+    setRunState('running')
+    setContent('')
+    setReasoning('')
+    setUsage(null)
+    setError(null)
+    setErrorKind(null)
+    setFinishReason(null)
+    setCopied(false)
+    setShowReasoning(false)
+
+    try {
+      const result = await polishText({
+        apiKey: key,
+        model: data.prefs.model,
+        mode,
+        text: sourceText,
+        thinking,
+        signal: controller.signal,
+        onContent: (full) => setContent(full),
+        onReasoning: (full) => setReasoning(full),
+        onUsage: (next) => setUsage(next),
+      })
+      abortRef.current = null
+      setContent(result.text)
+      setReasoning(result.reasoning)
+      setFinishReason(result.finishReason)
+      setRunState('done')
+    } catch (caught) {
+      abortRef.current = null
+      if (controller.signal.aborted) {
+        setRunState((current) => (current === 'running' ? 'stopped' : current))
+        return
+      }
+      if (caught instanceof DeepSeekRequestError) {
+        setError(caught.message)
+        setErrorKind(caught.kind)
+      } else {
+        setError('这次没有润色成功，请稍后再试。')
+        setErrorKind('request')
+      }
+      setRunState('error')
+    }
+  }
+
+  const stop = () => {
+    abortRef.current?.abort()
+    abortRef.current = null
+    setRunState((current) => (current === 'running' ? 'stopped' : current))
+  }
+
+  const handleApply = () => {
+    const cleaned = cleanAiText(content)
+    if (!cleaned) return
+    onApply(cleaned)
+    onClose()
+  }
+
+  const handleCopy = async () => {
+    const success = await writeClipboard(content)
+    setCopied(success)
+    if (!success) setError('复制没有成功，可以手动选中这段文字。')
+    window.setTimeout(() => setCopied(false), 1800)
+  }
+
+  const canRun = runState !== 'running'
+  const editingKey = !hasKey || keyEditing
+  const keyReady = editingKey ? Boolean(keyDraft.trim()) : hasKey
+  const noKeyMessage = 'AI 润色会把这段念头发送给 DeepSeek，并把 Key 留在本设备。'
+
+  return (
+    <Sheet
+      open={open}
+      onClose={() => {
+        abortRef.current?.abort()
+        onClose()
+      }}
+      title="让文字更靠近你"
+      eyebrow="AI 润色 · DEEPSEEK"
+      subtitle={contextLabel}
+      titleId="ai-polish-title"
+      panelClassName="ai-sheet"
+      bodyClassName="ai-sheet-body"
+      closeOnBackdrop={runState !== 'running'}
+      footer={
+        runState === 'done' ? (
+          <>
+            <Button variant="ghost" icon="refresh" onClick={() => start()} disabled={!canRun}>
+              再来一版
+            </Button>
+            <Button variant="primary" icon="check" onClick={handleApply}>
+              替换原文
+            </Button>
+          </>
+        ) : runState === 'running' ? (
+          <>
+            <span className="ai-running-note">
+              <span className="typing-dots" aria-hidden="true">
+                <i />
+                <i />
+                <i />
+              </span>
+              {thinking ? '正在多想几步…' : '正在落笔…'}
+            </span>
+            <Button variant="secondary" onClick={stop}>
+              停下
+            </Button>
+          </>
+        ) : (
+          <>
+            <span className="ai-footer-hint">{hasKey && !editingKey ? '密钥只在本机' : '尚未连接 DeepSeek'}</span>
+            <Button
+              variant="primary"
+              icon="spark"
+              onClick={() => start()}
+              disabled={!canRun || !keyReady || !sourceText.trim()}
+            >
+              {runState === 'error' ? '再试一次' : runState === 'stopped' ? '重新落笔' : '开始润色'}
+            </Button>
+          </>
+        )
+      }
+    >
+      <div className="ai-context">
+        <button
+          type="button"
+          className="ai-context-toggle"
+          onClick={() => setShowOriginal((value) => !value)}
+          aria-expanded={showOriginal}
+        >
+          <span>
+            <Icon name="feather" size={14} /> 原念
+          </span>
+          <span className="ai-context-date">{sourceText.trim().length} 字</span>
+          <Icon name="chevronDown" size={14} className={cx('chevron', showOriginal && 'is-up')} />
+        </button>
+        {showOriginal ? <p className="ai-original-text">{sourceText}</p> : null}
+      </div>
+
+      {editingKey ? (
+        <div className="ai-key-setup">
+          <div className="ai-key-copy">
+            <p className="ai-key-title">
+              <Icon name="key" size={15} />
+              {hasKey ? '换一把 DeepSeek 密钥' : '接上你的 DeepSeek'}
+            </p>
+            <p>{noKeyMessage}</p>
+          </div>
+          <div className="secret-field">
+            <input
+              type={showKey ? 'text' : 'password'}
+              value={keyDraft}
+              onChange={(event) => {
+                setKeyDraft(event.target.value)
+                if (errorKind === 'auth') setError(null)
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && keyDraft.trim()) {
+                  event.preventDefault()
+                  void start()
+                }
+              }}
+              placeholder="sk-... 粘贴 API Key"
+              autoComplete="off"
+              spellCheck={false}
+              aria-label="DeepSeek API Key"
+            />
+            <IconButton
+              label={showKey ? '隐藏密钥' : '显示密钥'}
+              icon={showKey ? 'eyeOff' : 'eye'}
+              onClick={() => setShowKey((value) => !value)}
+            />
+          </div>
+          <div className="ai-key-actions">
+            <a
+              className="text-link"
+              href="https://platform.deepseek.com/api_keys"
+              target="_blank"
+              rel="noreferrer"
+            >
+              去 DeepSeek 获取 Key
+              <Icon name="external" size={13} />
+            </a>
+            {hasKey ? (
+              <button
+                type="button"
+                className="text-action"
+                onClick={() => {
+                  setKeyEditing(false)
+                  setKeyDraft('')
+                  setError(null)
+                }}
+              >
+                取消更换
+              </button>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      <div className="ai-controls">
+        <fieldset className="control-group">
+          <legend className="field-label">怎么润</legend>
+          <div className="mode-grid" role="group" aria-label="润色方式">
+            {MODES.map((item) => (
+              <button
+                type="button"
+                aria-pressed={mode === item.value}
+                key={item.value}
+                className={cx('mode-card', mode === item.value && 'is-selected')}
+                onClick={() => setMode(item.value)}
+                disabled={runState === 'running'}
+              >
+                <span className="mode-name">{item.label}</span>
+                <span className="mode-hint">{item.hint}</span>
+              </button>
+            ))}
+          </div>
+        </fieldset>
+
+        <label className={cx('think-toggle', thinking && 'is-on')}>
+          <span className="think-toggle-copy">
+            <span className="think-toggle-title">
+              <Icon name="spark" size={15} />
+              深思
+            </span>
+            <span className="think-toggle-hint">更慢，通常更准确</span>
+          </span>
+          <input
+            type="checkbox"
+            checked={thinking}
+            onChange={(event) => setThinking(event.target.checked)}
+            disabled={runState === 'running'}
+          />
+          <span className="switch" aria-hidden="true">
+            <span />
+          </span>
+        </label>
+        <p className="model-hint">
+          {data.prefs.model === 'deepseek-flash' ? 'DeepSeek Flash' : 'DeepSeek V4 Pro'}
+          {thinking ? ' · 思考模式' : ' · 快速模式'} · 可在设置中切换
+          {hasKey && !editingKey ? (
+            <button
+              type="button"
+              className="ai-key-change"
+              onClick={() => {
+                setKeyEditing(true)
+                setKeyDraft('')
+                setShowKey(false)
+              }}
+            >
+              更换密钥
+            </button>
+          ) : null}
+        </p>
+      </div>
+
+      {runState === 'running' || content || runState === 'done' || runState === 'stopped' ? (
+        <div className="ai-result-block">
+          <div className="ai-result-head">
+            <span className="field-label">落笔 · {modeName(mode)}</span>
+            {runState === 'done' ? (
+              <span className="ai-done-mark">
+                <Icon name="checkCircle" size={14} /> 完成
+              </span>
+            ) : runState === 'stopped' ? (
+              <span className="ai-done-mark is-muted">已停下</span>
+            ) : null}
+          </div>
+
+          {reasoning ? (
+            <div className={cx('reasoning-box', showReasoning && 'is-open')}>
+              <button
+                type="button"
+                className="reasoning-toggle"
+                onClick={() => setShowReasoning((value) => !value)}
+                aria-expanded={showReasoning}
+              >
+                <span>
+                  <Icon name="bulb" size={14} />
+                  {runState === 'running' ? '正在思考' : '思考过程'}
+                  <span className="reasoning-count">{reasoning.length} 字</span>
+                </span>
+                <Icon name="chevronDown" size={14} className={cx('chevron', showReasoning && 'is-up')} />
+              </button>
+              {showReasoning ? <div className="reasoning-text">{reasoning}</div> : null}
+            </div>
+          ) : null}
+
+          <div className="ai-output" ref={outputRef} aria-live="polite">
+            {content ? (
+              <p className="ai-output-text">{content}</p>
+            ) : (
+              <div className="ai-writing-state" aria-hidden="true">
+                <span className="ink-line" />
+                <span className="ink-line ink-line-short" />
+                <span className="ink-line ink-line-mid" />
+              </div>
+            )}
+            {runState === 'running' && content ? <span className="typing-caret" aria-hidden="true" /> : null}
+          </div>
+
+          {runState === 'done' && finishReason === 'length' ? (
+            <p className="inline-note">
+              这次可能没有写完整。可以再来一版，或把长念头分两段润色。
+            </p>
+          ) : null}
+
+          {runState === 'done' || runState === 'stopped' ? (
+            <div className="ai-result-meta">
+              <span>{usageLine(usage) ?? 'DeepSeek 已完成这次润色'}</span>
+              {content ? (
+                <button type="button" className="text-action" onClick={handleCopy}>
+                  <Icon name="copy" size={14} />
+                  {copied ? '已复制' : '复制'}
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {error ? (
+        <div className="ai-error" role="alert">
+          <Icon name="alert" size={17} />
+          <div>
+            <p>{error}</p>
+            {errorKind === 'auth' ? (
+              <button
+                type="button"
+                className="text-action"
+                onClick={() => {
+                  setKeyEditing(true)
+                  setKeyDraft('')
+                  setError(null)
+                }}
+              >
+                更换密钥
+              </button>
+            ) : errorKind === 'balance' ? (
+              <a
+                className="text-action"
+                href="https://platform.deepseek.com/top_up"
+                target="_blank"
+                rel="noreferrer"
+              >
+                查看 DeepSeek 余额
+                <Icon name="external" size={12} />
+              </a>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      {!sourceText.trim() ? (
+        <p className="inline-note">先写下一点内容，再让 AI 帮你润色。</p>
+      ) : null}
+    </Sheet>
+  )
+}
