@@ -68,6 +68,8 @@ npm install
 npm run dev
 ```
 
+开发地址固定为 <http://localhost:7173>；端口被占用时直接报错，不会悄悄换端口。
+
 生产构建与预览：
 
 ```bash

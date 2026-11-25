@@ -13,6 +13,10 @@ export default defineConfig(() => {
 
   return {
     base,
+    server: {
+      port: 7173,
+      strictPort: true,
+    },
     plugins: [
       react(),
       VitePWA({
