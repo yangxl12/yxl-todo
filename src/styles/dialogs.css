@@ -30,9 +30,7 @@
 
 .modal::backdrop {
   background-color: transparent;
-  backdrop-filter: blur(0);
-  -webkit-backdrop-filter: blur(0);
-  transition: background-color 200ms var(--ease-out), backdrop-filter 200ms var(--ease-out);
+  transition: background-color 200ms var(--ease-out);
 }
 
 .modal.is-open::backdrop {

@@ -72,12 +72,42 @@ export function AiPolishSheet({
   const abortRef = useRef<AbortController | null>(null)
   const outputRef = useRef<HTMLDivElement>(null)
   const wasOpen = useRef(false)
+  const pendingContent = useRef('')
+  const pendingReasoning = useRef('')
+  const streamTimer = useRef<number | null>(null)
+
+  const clearStreamTimer = () => {
+    if (streamTimer.current !== null) {
+      window.clearTimeout(streamTimer.current)
+      streamTimer.current = null
+    }
+  }
+
+  // Tokens arrive faster than a screen refresh; repainting at ~20fps keeps the
+  // text flowing without a state update for every chunk.
+  const scheduleTextFlush = () => {
+    if (streamTimer.current !== null) return
+    streamTimer.current = window.setTimeout(() => {
+      streamTimer.current = null
+      setContent(pendingContent.current)
+      setReasoning(pendingReasoning.current)
+    }, 50)
+  }
+
+  const flushPendingText = () => {
+    clearStreamTimer()
+    setContent(pendingContent.current)
+    setReasoning(pendingReasoning.current)
+  }
 
   const apiKey = data.prefs.apiKey
   const hasKey = Boolean(apiKey)
 
   useEffect(() => {
     if (open && !wasOpen.current) {
+      clearStreamTimer()
+      pendingContent.current = ''
+      pendingReasoning.current = ''
       setMode('clear')
       setThinking(false)
       setRunState('idle')
@@ -106,6 +136,7 @@ export function AiPolishSheet({
   useEffect(
     () => () => {
       abortRef.current?.abort()
+      clearStreamTimer()
     },
     [],
   )
@@ -139,6 +170,9 @@ export function AiPolishSheet({
     abortRef.current?.abort()
     const controller = new AbortController()
     abortRef.current = controller
+    clearStreamTimer()
+    pendingContent.current = ''
+    pendingReasoning.current = ''
     setRunState('running')
     setContent('')
     setReasoning('')
@@ -157,17 +191,25 @@ export function AiPolishSheet({
         text: sourceText,
         thinking,
         signal: controller.signal,
-        onContent: (full) => setContent(full),
-        onReasoning: (full) => setReasoning(full),
+        onContent: (full) => {
+          pendingContent.current = full
+          scheduleTextFlush()
+        },
+        onReasoning: (full) => {
+          pendingReasoning.current = full
+          scheduleTextFlush()
+        },
         onUsage: (next) => setUsage(next),
       })
       abortRef.current = null
+      clearStreamTimer()
       setContent(result.text)
       setReasoning(result.reasoning)
       setFinishReason(result.finishReason)
       setRunState('done')
     } catch (caught) {
       abortRef.current = null
+      flushPendingText()
       if (controller.signal.aborted) {
         setRunState((current) => (current === 'running' ? 'stopped' : current))
         return
@@ -186,6 +228,7 @@ export function AiPolishSheet({
   const stop = () => {
     abortRef.current?.abort()
     abortRef.current = null
+    flushPendingText()
     setRunState((current) => (current === 'running' ? 'stopped' : current))
   }
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button, IconButton } from '../../components/Button'
 import { ConfirmSheet } from '../../components/ConfirmSheet'
 import { ChoiceSheet } from '../../components/ChoiceSheet'
@@ -17,6 +17,19 @@ const PAGE_SIZE = 30
 
 function normalizeSearch(value: string): string {
   return value.trim().toLocaleLowerCase('zh-CN')
+}
+
+// Ideas are immutable snapshots, so a lowered search blob only has to be built
+// once per idea no matter how many keystrokes filter over it.
+const searchBlobs = new WeakMap<Idea, string>()
+
+function ideaSearchBlob(idea: Idea): string {
+  let blob = searchBlobs.get(idea)
+  if (blob === undefined) {
+    blob = `${idea.text}\n${idea.tags.join('\n')}`.toLocaleLowerCase('zh-CN')
+    searchBlobs.set(idea, blob)
+  }
+  return blob
 }
 
 export function IdeasView() {
@@ -48,10 +61,7 @@ export function IdeasView() {
     return data.ideas.filter((idea) => {
       if (activeTag && !idea.tags.includes(activeTag)) return false
       if (!needle) return true
-      return (
-        idea.text.toLocaleLowerCase('zh-CN').includes(needle) ||
-        idea.tags.some((tag) => tag.toLocaleLowerCase('zh-CN').includes(needle))
-      )
+      return ideaSearchBlob(idea).includes(needle)
     })
   }, [activeTag, data.ideas, query])
 
@@ -92,10 +102,10 @@ export function IdeasView() {
   const shown = sortedIdeas.slice(0, visibleCount)
   const hasFilters = Boolean(query || activeTag)
 
-  const openIdea = (idea: Idea) => {
+  const openIdea = useCallback((idea: Idea) => {
     setSelectedIdea(idea)
     setDetailOpen(true)
-  }
+  }, [])
 
   const focusComposer = () => {
     const textarea = document.getElementById('idea-composer')
@@ -263,7 +273,7 @@ export function IdeasView() {
                   idea={idea}
                   index={index}
                   isNew={idea.id === lastAddedId}
-                  onOpen={() => openIdea(idea)}
+                  onOpen={openIdea}
                 />
               ))}
             </div>

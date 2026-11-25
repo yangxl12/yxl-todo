@@ -3,24 +3,35 @@ import { toDateKey } from '../../lib/date'
 
 const PRIORITY_RANK: Record<Priority, number> = { high: 0, normal: 1, low: 2 }
 
-export function isGoalComplete(goal: Goal): boolean {
-  return goal.tasks.length > 0 && goal.tasks.every((task) => task.done)
+export interface GoalStats {
+  total: number
+  done: number
+  complete: boolean
+  progress: number
 }
 
-export function goalProgress(goal: Goal): number {
-  if (!goal.tasks.length) return 0
-  return goal.tasks.filter((task) => task.done).length / goal.tasks.length
-}
-
-export function completedTaskCount(goal: Goal): number {
-  return goal.tasks.filter((task) => task.done).length
+/** One pass over a goal's tasks; cards and sorting both read from this. */
+export function goalStats(goal: Goal): GoalStats {
+  const total = goal.tasks.length
+  let done = 0
+  for (const task of goal.tasks) {
+    if (task.done) done += 1
+  }
+  return {
+    total,
+    done,
+    complete: total > 0 && done === total,
+    progress: total ? done / total : 0,
+  }
 }
 
 export function latestCompletion(goal: Goal): number {
-  return Math.max(
-    ...goal.tasks.map((task) => task.completedAt ?? 0),
-    goal.createdAt,
-  )
+  let latest = goal.createdAt
+  for (const task of goal.tasks) {
+    const completedAt = task.completedAt ?? 0
+    if (completedAt > latest) latest = completedAt
+  }
+  return latest
 }
 
 export function orderOpenTasks(tasks: Task[]): Task[] {
@@ -44,7 +55,9 @@ export function goalTaskCounts(goals: Goal[]): { total: number; done: number } {
   let done = 0
   for (const goal of goals) {
     total += goal.tasks.length
-    done += goal.tasks.filter((task) => task.done).length
+    for (const task of goal.tasks) {
+      if (task.done) done += 1
+    }
   }
   return { total, done }
 }
@@ -58,7 +71,12 @@ export function getTodayEntries(goals: Goal[]): DueTaskEntry[] {
   const today = toDateKey()
   const entries: DueTaskEntry[] = []
   for (const goal of goals) {
-    if (isGoalComplete(goal)) continue
+    if (!goal.tasks.length) continue
+    let open = 0
+    for (const task of goal.tasks) {
+      if (!task.done) open += 1
+    }
+    if (open === 0) continue
     for (const task of goal.tasks) {
       if (!task.done && task.dueDate && task.dueDate <= today) {
         entries.push({ goal, task })

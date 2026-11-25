@@ -1,39 +1,32 @@
-import { useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
+import { memo, useCallback, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { Button, IconButton } from '../../components/Button'
 import { Icon } from '../../components/Icon'
 import { DOMAIN_MAP, PRIORITY_LABEL } from '../../lib/domains'
 import { formatDueDate, getDueTone } from '../../lib/date'
 import type { Goal, Task } from '../../lib/types'
 import { cx } from '../../lib/utils'
-import {
-  completedTaskCount,
-  goalProgress,
-  isGoalComplete,
-  orderDoneTasks,
-  orderOpenTasks,
-} from './taskUtils'
+import { goalStats, orderDoneTasks, orderOpenTasks } from './taskUtils'
 
 interface GoalCardProps {
   goal: Goal
   expanded: boolean
-  onToggleExpanded: () => void
-  onEdit: () => void
-  onToggleTask: (task: Task) => void
-  onEditTask: (task: Task) => void
-  onAddTask: (title: string) => void
+  onToggleExpanded: (goalId: string) => void
+  onEdit: (goal: Goal) => void
+  onToggleTask: (goalId: string, taskId: string) => void
+  onEditTask: (goalId: string, task: Task) => void
+  onAddTask: (goalId: string, title: string) => void
 }
 
-function TaskRow({
-  task,
-  goalTitle,
-  onToggle,
-  onEdit,
-}: {
+const EMPTY_TASKS: Task[] = []
+
+interface TaskRowProps {
   task: Task
   goalTitle: string
-  onToggle: () => void
-  onEdit: () => void
-}) {
+  onToggle: (task: Task) => void
+  onEdit: (task: Task) => void
+}
+
+const TaskRow = memo(function TaskRow({ task, goalTitle, onToggle, onEdit }: TaskRowProps) {
   const tone = getDueTone(task.dueDate, task.done)
 
   return (
@@ -44,7 +37,7 @@ function TaskRow({
         aria-checked={task.done}
         aria-label={task.done ? `把「${task.title}」标为未完成` : `完成「${task.title}」`}
         className="task-check"
-        onClick={onToggle}
+        onClick={() => onToggle(task)}
       >
         <Icon name="check" size={14} />
       </button>
@@ -52,7 +45,7 @@ function TaskRow({
         <button
           type="button"
           className="task-title"
-          onClick={onEdit}
+          onClick={() => onEdit(task)}
           title={`编辑这一步：${goalTitle}`}
         >
           {task.title}
@@ -80,13 +73,13 @@ function TaskRow({
         size={15}
         subtle
         className="task-edit"
-        onClick={onEdit}
+        onClick={() => onEdit(task)}
       />
     </li>
   )
-}
+})
 
-export function GoalCard({
+export const GoalCard = memo(function GoalCard({
   goal,
   expanded,
   onToggleExpanded,
@@ -98,15 +91,31 @@ export function GoalCard({
   const [taskTitle, setTaskTitle] = useState('')
   const [showDone, setShowDone] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
-  const complete = isGoalComplete(goal)
-  const progress = goalProgress(goal)
-  const doneCount = completedTaskCount(goal)
-  const openTasks = orderOpenTasks(goal.tasks.filter((task) => !task.done))
-  const doneTasks = orderDoneTasks(goal.tasks.filter((task) => task.done))
+  const { total, done: doneCount, complete, progress } = goalStats(goal)
+
+  // Task lists are only needed while the card is open; keeping them out of the
+  // collapsed path saves two filters and two sorts per card per render.
+  const openTasks = expanded
+    ? orderOpenTasks(goal.tasks.filter((task) => !task.done))
+    : EMPTY_TASKS
+  const doneTasks = expanded ? orderDoneTasks(goal.tasks.filter((task) => task.done)) : EMPTY_TASKS
+
   const domain = DOMAIN_MAP[goal.domain]
   const tone = getDueTone(goal.dueDate, complete)
-  const showCompletedBlock = !complete && doneTasks.length > 0
+  const showCompletedBlock = !complete && doneCount > 0
   const tasksId = `goal-tasks-${goal.id}`
+  const percent = Math.round(progress * 100)
+
+  const handleToggleExpanded = useCallback(() => onToggleExpanded(goal.id), [goal.id, onToggleExpanded])
+  const handleEdit = useCallback(() => onEdit(goal), [goal, onEdit])
+  const handleToggleTask = useCallback(
+    (task: Task) => onToggleTask(goal.id, task.id),
+    [goal.id, onToggleTask],
+  )
+  const handleEditTask = useCallback(
+    (task: Task) => onEditTask(goal.id, task),
+    [goal.id, onEditTask],
+  )
 
   const submitTask = (event?: FormEvent) => {
     event?.preventDefault()
@@ -115,7 +124,7 @@ export function GoalCard({
       inputRef.current?.focus()
       return
     }
-    onAddTask(cleaned)
+    onAddTask(goal.id, cleaned)
     setTaskTitle('')
     window.requestAnimationFrame(() => inputRef.current?.focus())
   }
@@ -129,11 +138,7 @@ export function GoalCard({
 
   return (
     <article
-      className={cx(
-        'goal-card',
-        `domain-${goal.domain}`,
-        complete && 'is-complete',
-      )}
+      className={cx('goal-card', `domain-${goal.domain}`, complete && 'is-complete')}
       id={`goal-${goal.id}`}
     >
       <div className="goal-accent" aria-hidden="true" />
@@ -143,7 +148,7 @@ export function GoalCard({
         size={18}
         subtle
         className="goal-edit-button"
-        onClick={onEdit}
+        onClick={handleEdit}
       />
       <div
         className="goal-summary"
@@ -151,11 +156,11 @@ export function GoalCard({
         tabIndex={0}
         aria-expanded={expanded}
         aria-controls={tasksId}
-        onClick={onToggleExpanded}
+        onClick={handleToggleExpanded}
         onKeyDown={(event) => {
           if (event.key === 'Enter' || event.key === ' ') {
             event.preventDefault()
-            onToggleExpanded()
+            handleToggleExpanded()
           }
         }}
       >
@@ -184,12 +189,12 @@ export function GoalCard({
 
         <div className="goal-progress-row">
           <span className="goal-progress-numbers">
-            {doneCount} / {goal.tasks.length} 步
+            {doneCount} / {total} 步
           </span>
           <span className="goal-bar" aria-hidden="true">
-            <span style={{ width: `${Math.round(progress * 100)}%` }} />
+            <span style={{ transform: `scaleX(${progress})` }} />
           </span>
-          <span className="goal-percent">{Math.round(progress * 100)}%</span>
+          <span className="goal-percent">{percent}%</span>
           <span className={expanded ? 'goal-chevron is-open' : 'goal-chevron'} aria-hidden="true">
             <Icon name="chevronDown" size={16} />
           </span>
@@ -212,8 +217,8 @@ export function GoalCard({
                   key={task.id}
                   task={task}
                   goalTitle={goal.title}
-                  onToggle={() => onToggleTask(task)}
-                  onEdit={() => onEditTask(task)}
+                  onToggle={handleToggleTask}
+                  onEdit={handleEditTask}
                 />
               ))}
             </ul>
@@ -228,7 +233,7 @@ export function GoalCard({
                 aria-expanded={showDone}
               >
                 <span>
-                  已完成 {doneTasks.length} 步
+                  已完成 {doneCount} 步
                 </span>
                 <Icon
                   name="chevronDown"
@@ -243,8 +248,8 @@ export function GoalCard({
                       key={task.id}
                       task={task}
                       goalTitle={goal.title}
-                      onToggle={() => onToggleTask(task)}
-                      onEdit={() => onEditTask(task)}
+                      onToggle={handleToggleTask}
+                      onEdit={handleEditTask}
                     />
                   ))}
                 </ul>
@@ -261,8 +266,8 @@ export function GoalCard({
                     key={task.id}
                     task={task}
                     goalTitle={goal.title}
-                    onToggle={() => onToggleTask(task)}
-                    onEdit={() => onEditTask(task)}
+                    onToggle={handleToggleTask}
+                    onEdit={handleEditTask}
                   />
                 ))}
               </ul>
@@ -305,11 +310,11 @@ export function GoalCard({
 
       {!expanded && !goal.tasks.length ? (
         <div className="goal-quiet-cta">
-          <Button variant="ghost" size="small" icon="plus" onClick={onToggleExpanded}>
+          <Button variant="ghost" size="small" icon="plus" onClick={handleToggleExpanded}>
             写下第一步
           </Button>
         </div>
       ) : null}
     </article>
   )
-}
+})

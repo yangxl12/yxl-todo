@@ -47,7 +47,12 @@ export function Modal({
         window.clearTimeout(closeTimer.current)
         closeTimer.current = null
       }
-      setMounted(true)
+      if (!mounted) {
+        // The mount pass below owns the first reveal; only a re-open that is
+        // still waiting for its close timer needs its own animation frame.
+        setMounted(true)
+        return
+      }
       const frame = window.requestAnimationFrame(() => setVisible(true))
       return () => window.cancelAnimationFrame(frame)
     }

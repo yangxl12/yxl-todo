@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Button, IconButton } from '../../components/Button'
 import { ConfirmSheet } from '../../components/ConfirmSheet'
 import { Icon } from '../../components/Icon'
@@ -54,7 +54,7 @@ export function SettingsSheet({ open, onClose }: SettingsSheetProps) {
   const fileRef = useRef<HTMLInputElement>(null)
   const hasKey = Boolean(data.prefs.apiKey)
   const editingKey = keyEditing || !hasKey
-  const stats = goalTaskCounts(data.goals)
+  const stats = useMemo(() => goalTaskCounts(data.goals), [data.goals])
 
   useEffect(() => {
     if (!open) return

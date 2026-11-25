@@ -82,6 +82,25 @@
   z-index: 1;
 }
 
+.today-more {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  margin-top: 2px;
+  padding: 9px 0 5px;
+  border-top: 1px solid var(--today-line);
+  color: var(--today-muted);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  text-align: center;
+  transition: color var(--dur-fast) ease;
+}
+
+.today-more:hover {
+  color: var(--today-text);
+}
+
 .today-task {
   display: flex;
   align-items: flex-start;
@@ -188,6 +207,9 @@
   background: var(--card);
   box-shadow: var(--shadow-sm);
   overflow: hidden;
+  /* The card already clips its own content, so layout/paint work inside one
+     card can stay inside it instead of invalidating the whole goal list. */
+  contain: layout paint;
   transition: border-color var(--dur-base) ease, box-shadow var(--dur-base) ease,
     transform var(--dur-base) var(--ease-out);
 }
@@ -346,10 +368,12 @@
 
 .goal-bar > span {
   display: block;
+  width: 100%;
   height: 100%;
   border-radius: inherit;
   background: var(--domain-color);
-  transition: width 520ms var(--ease-out);
+  transform-origin: left center;
+  transition: transform 520ms var(--ease-out);
 }
 
 .goal-percent {

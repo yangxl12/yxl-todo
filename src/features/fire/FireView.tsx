@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { memo, useMemo, useState } from 'react'
 import { Button } from '../../components/Button'
 import { EmptyState } from '../../components/EmptyState'
 import { Icon } from '../../components/Icon'
@@ -157,7 +157,7 @@ function DailyEmber({
   )
 }
 
-function MethodCard({ item, index }: { item: FireMethod; index: number }) {
+const MethodCard = memo(function MethodCard({ item, index }: { item: FireMethod; index: number }) {
   return (
     <article className="fire-card method-card">
       <div className="fire-card-top">
@@ -178,9 +178,9 @@ function MethodCard({ item, index }: { item: FireMethod; index: number }) {
       <ScienceDetails item={item} />
     </article>
   )
-}
+})
 
-function QuoteCard({ item, index }: { item: FireQuote; index: number }) {
+const QuoteCard = memo(function QuoteCard({ item, index }: { item: FireQuote; index: number }) {
   return (
     <article className="fire-card quote-card">
       <div className="fire-card-top">
@@ -202,7 +202,7 @@ function QuoteCard({ item, index }: { item: FireQuote; index: number }) {
       </footer>
     </article>
   )
-}
+})
 
 export function FireView() {
   const { data } = useApp()
@@ -212,8 +212,23 @@ export function FireView() {
 
   const methods = useMemo(() => FIRE_ITEMS.filter((item): item is FireMethod => item.kind === 'method'), [])
   const quotes = useMemo(() => FIRE_ITEMS.filter((item): item is FireQuote => item.kind === 'quote'), [])
-  const savedMethods = methods.filter((item) => data.favorites.includes(item.id))
-  const savedQuotes = quotes.filter((item) => data.favorites.includes(item.id))
+  const methodIndex = useMemo(
+    () => new Map(methods.map((item, index) => [item.id, index])),
+    [methods],
+  )
+  const quoteIndex = useMemo(
+    () => new Map(quotes.map((item, index) => [item.id, index])),
+    [quotes],
+  )
+  const favoriteIds = useMemo(() => new Set(data.favorites), [data.favorites])
+  const savedMethods = useMemo(
+    () => methods.filter((item) => favoriteIds.has(item.id)),
+    [favoriteIds, methods],
+  )
+  const savedQuotes = useMemo(
+    () => quotes.filter((item) => favoriteIds.has(item.id)),
+    [favoriteIds, quotes],
+  )
   const showMethods = filter === 'all' || filter === 'method' || (filter === 'saved' && savedMethods.length > 0)
   const showQuotes = filter === 'all' || filter === 'quote' || (filter === 'saved' && savedQuotes.length > 0)
   const savedTotal = savedMethods.length + savedQuotes.length
@@ -298,7 +313,7 @@ export function FireView() {
               </div>
               <div className="fire-grid">
                 {visibleMethodList.map((item) => (
-                  <MethodCard key={item.id} item={item} index={methods.indexOf(item)} />
+                  <MethodCard key={item.id} item={item} index={methodIndex.get(item.id) ?? 0} />
                 ))}
               </div>
             </section>
@@ -318,7 +333,7 @@ export function FireView() {
               </div>
               <div className="quote-grid">
                 {visibleQuoteList.map((item) => (
-                  <QuoteCard key={item.id} item={item} index={quotes.indexOf(item)} />
+                  <QuoteCard key={item.id} item={item} index={quoteIndex.get(item.id) ?? 0} />
                 ))}
               </div>
             </section>

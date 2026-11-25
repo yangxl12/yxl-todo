@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '../../components/Button'
 import { ChoiceSheet } from '../../components/ChoiceSheet'
 import { ConfirmSheet } from '../../components/ConfirmSheet'
@@ -16,10 +16,10 @@ import { GoalEditorSheet } from './GoalEditorSheet'
 import { TaskEditorSheet } from './TaskEditorSheet'
 import {
   getTodayEntries,
-  goalProgress,
+  goalStats,
   goalTaskCounts,
-  isGoalComplete,
   latestCompletion,
+  type GoalStats,
 } from './taskUtils'
 import { cx } from '../../lib/utils'
 
@@ -30,7 +30,19 @@ type DeleteTarget =
   | { kind: 'task'; goalId: string; task: Task }
   | null
 
-function sortActiveGoals(goals: Goal[], sort: GoalSort): Goal[] {
+// Same rhythm as the thoughts list: render a first screenful, let the rest
+// arrive on request instead of mounting every goal card up front.
+const PAGE_SIZE = 30
+// The today strip is a focus list, not an archive; a long tail of overdue
+// items stays one tap away instead of being mounted every time.
+const TODAY_LIMIT = 20
+
+function sortActiveGoals(
+  goals: Goal[],
+  sort: GoalSort,
+  stats: Map<string, GoalStats>,
+): Goal[] {
+  const progressOf = (goal: Goal) => stats.get(goal.id)?.progress ?? 0
   return [...goals].sort((a, b) => {
     if (sort === 'due') {
       if (a.dueDate !== b.dueDate) {
@@ -41,7 +53,7 @@ function sortActiveGoals(goals: Goal[], sort: GoalSort): Goal[] {
       return b.createdAt - a.createdAt
     }
     if (sort === 'progress') {
-      const diff = goalProgress(b) - goalProgress(a)
+      const diff = progressOf(b) - progressOf(a)
       if (diff !== 0) return diff
       return b.createdAt - a.createdAt
     }
@@ -62,36 +74,64 @@ export function GoalsView() {
   const [taskEditorOpen, setTaskEditorOpen] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget>(null)
   const [newGoalId, setNewGoalId] = useState<string | null>(null)
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
+  const [todayOpen, setTodayOpen] = useState(false)
   const didAutoExpand = useRef(false)
+  // Stable callbacks below read the freshest data through this ref, so memoized
+  // cards keep their identity while store updates still reach the handler.
+  const dataRef = useRef(data)
+  dataRef.current = data
 
-  const activeGoals = useMemo(
-    () => data.goals.filter((goal) => !isGoalComplete(goal)),
-    [data.goals],
-  )
-  const completedGoals = useMemo(
-    () => data.goals.filter((goal) => isGoalComplete(goal)),
-    [data.goals],
-  )
+  const goalBuckets = useMemo(() => {
+    const stats = new Map<string, GoalStats>()
+    const active: Goal[] = []
+    const completed: Goal[] = []
+    for (const goal of data.goals) {
+      const entry = goalStats(goal)
+      stats.set(goal.id, entry)
+      if (entry.complete) completed.push(goal)
+      else active.push(goal)
+    }
+    return { active, completed, stats }
+  }, [data.goals])
+
+  const activeGoals = goalBuckets.active
+  const completedGoals = goalBuckets.completed
 
   const sortedActive = useMemo(
-    () => sortActiveGoals(activeGoals, data.prefs.goalSort),
-    [activeGoals, data.prefs.goalSort],
+    () => sortActiveGoals(activeGoals, data.prefs.goalSort, goalBuckets.stats),
+    [activeGoals, data.prefs.goalSort, goalBuckets.stats],
   )
-  const sortedCompleted = useMemo(
-    () =>
-      [...completedGoals].sort((a, b) => latestCompletion(b) - latestCompletion(a)),
-    [completedGoals],
-  )
+  const sortedCompleted = useMemo(() => {
+    const latest = new Map<string, number>()
+    for (const goal of completedGoals) latest.set(goal.id, latestCompletion(goal))
+    return [...completedGoals].sort((a, b) => (latest.get(b.id) ?? 0) - (latest.get(a.id) ?? 0))
+  }, [completedGoals])
 
-  const visibleActive = domainFilter
-    ? sortedActive.filter((goal) => goal.domain === domainFilter)
-    : sortedActive
-  const visibleCompleted = domainFilter
-    ? sortedCompleted.filter((goal) => goal.domain === domainFilter)
-    : sortedCompleted
+  const visibleActive = useMemo(
+    () => (domainFilter ? sortedActive.filter((goal) => goal.domain === domainFilter) : sortedActive),
+    [domainFilter, sortedActive],
+  )
+  const visibleCompleted = useMemo(
+    () =>
+      domainFilter ? sortedCompleted.filter((goal) => goal.domain === domainFilter) : sortedCompleted,
+    [domainFilter, sortedCompleted],
+  )
+  const shownActive = useMemo(
+    () => visibleActive.slice(0, visibleCount),
+    [visibleActive, visibleCount],
+  )
+  const shownCompleted = useMemo(
+    () => visibleCompleted.slice(0, visibleCount),
+    [visibleCompleted, visibleCount],
+  )
 
   const todayEntries = useMemo(() => getTodayEntries(data.goals), [data.goals])
   const todayCount = todayEntries.length
+  const shownToday = useMemo(
+    () => (todayOpen ? todayEntries : todayEntries.slice(0, TODAY_LIMIT)),
+    [todayEntries, todayOpen],
+  )
   const counts = useMemo(() => goalTaskCounts(data.goals), [data.goals])
   const availableDomains = useMemo(() => {
     const used = new Set(data.goals.map((goal) => goal.domain))
@@ -108,6 +148,10 @@ export function GoalsView() {
 
   useEffect(() => {
     if (!newGoalId) return
+    // Make sure a newly created goal is inside the rendered window before we
+    // scroll to it (its sort position can put it past the first page).
+    const index = sortedActive.findIndex((goal) => goal.id === newGoalId)
+    if (index >= 0) setVisibleCount((count) => (count > index ? count : index + 1))
     const scrollTimer = window.setTimeout(() => {
       document
         .getElementById(`goal-${newGoalId}`)
@@ -115,7 +159,7 @@ export function GoalsView() {
       setNewGoalId(null)
     }, 140)
     return () => window.clearTimeout(scrollTimer)
-  }, [newGoalId])
+  }, [newGoalId, sortedActive])
 
   const editGoalObject =
     goalEditor?.mode === 'edit'
@@ -126,63 +170,76 @@ export function GoalsView() {
     : null
   const taskObject = taskGoal?.tasks.find((task) => task.id === taskEditor?.taskId) ?? null
 
-  const toggleExpanded = (goalId: string) => {
+  const toggleExpanded = useCallback((goalId: string) => {
     setExpandedIds((current) => {
       const next = new Set(current)
       if (next.has(goalId)) next.delete(goalId)
       else next.add(goalId)
       return next
     })
-  }
+  }, [])
 
   const openNewGoal = () => {
     setGoalEditor({ mode: 'create' })
     setGoalEditorOpen(true)
   }
 
-  const openEditGoal = (goal: Goal) => {
+  const chooseDomain = (next: DomainKey | null) => {
+    setDomainFilter(next)
+    setVisibleCount(PAGE_SIZE)
+  }
+
+  const openEditGoal = useCallback((goal: Goal) => {
     setGoalEditor({ mode: 'edit', goalId: goal.id })
     setGoalEditorOpen(true)
-  }
+  }, [])
 
-  const openTaskEditor = (goal: Goal, task: Task) => {
-    setTaskEditor({ goalId: goal.id, taskId: task.id })
+  const openTaskEditor = useCallback((goalId: string, task: Task) => {
+    setTaskEditor({ goalId, taskId: task.id })
     setTaskEditorOpen(true)
-  }
+  }, [])
 
-  const toggleTask = (goal: Goal, task: Task) => {
-    const now = Date.now()
-    const completing = !task.done
-    const willComplete =
-      completing &&
-      goal.tasks.length > 0 &&
-      goal.tasks.every((entry) => (entry.id === task.id ? true : entry.done))
-    dispatch({ type: 'task/toggle', goalId: goal.id, taskId: task.id, now })
-    if (completing) {
-      showToast(willComplete ? `「${goal.title}」走完了` : '完成了一步', {
-        actionLabel: '撤回',
-        duration: willComplete ? 6500 : 4200,
-        onAction: () =>
-          dispatch({ type: 'task/toggle', goalId: goal.id, taskId: task.id, now: Date.now() }),
-      })
-    }
-  }
+  const toggleTask = useCallback(
+    (goalId: string, taskId: string) => {
+      const goal = dataRef.current.goals.find((entry) => entry.id === goalId)
+      const task = goal?.tasks.find((entry) => entry.id === taskId)
+      if (!goal || !task) return
+      const now = Date.now()
+      const completing = !task.done
+      const willComplete =
+        completing &&
+        goal.tasks.length > 0 &&
+        goal.tasks.every((entry) => (entry.id === taskId ? true : entry.done))
+      dispatch({ type: 'task/toggle', goalId, taskId, now })
+      if (completing) {
+        showToast(willComplete ? `「${goal.title}」走完了` : '完成了一步', {
+          actionLabel: '撤回',
+          duration: willComplete ? 6500 : 4200,
+          onAction: () => dispatch({ type: 'task/toggle', goalId, taskId, now: Date.now() }),
+        })
+      }
+    },
+    [dispatch, showToast],
+  )
 
-  const addTask = (goal: Goal, title: string) => {
-    const now = Date.now()
-    const task: Task = {
-      id: newId(),
-      title,
-      done: false,
-      createdAt: now,
-      updatedAt: now,
-      completedAt: null,
-      dueDate: null,
-      priority: 'normal',
-    }
-    dispatch({ type: 'task/add', goalId: goal.id, task })
-    setExpandedIds((current) => new Set(current).add(goal.id))
-  }
+  const addTask = useCallback(
+    (goalId: string, title: string) => {
+      const now = Date.now()
+      const task: Task = {
+        id: newId(),
+        title,
+        done: false,
+        createdAt: now,
+        updatedAt: now,
+        completedAt: null,
+        dueDate: null,
+        priority: 'normal',
+      }
+      dispatch({ type: 'task/add', goalId, task })
+      setExpandedIds((current) => new Set(current).add(goalId))
+    },
+    [dispatch],
+  )
 
   const saveGoal = (values: {
     title: string
@@ -205,6 +262,7 @@ export function GoalsView() {
       dispatch({ type: 'goal/add', goal })
       setExpandedIds((current) => new Set(current).add(goal.id))
       setDomainFilter(null)
+      setVisibleCount(PAGE_SIZE)
       setNewGoalId(goal.id)
       showToast('目标已立下，先写下第一步')
     } else if (editGoalObject) {
@@ -218,7 +276,7 @@ export function GoalsView() {
           dueDate: values.dueDate,
         },
       })
-      if (domainFilter && values.domain !== domainFilter) setDomainFilter(null)
+      if (domainFilter && values.domain !== domainFilter) chooseDomain(null)
     }
     setGoalEditorOpen(false)
   }
@@ -258,11 +316,11 @@ export function GoalsView() {
       key={goal.id}
       goal={goal}
       expanded={expandedIds.has(goal.id)}
-      onToggleExpanded={() => toggleExpanded(goal.id)}
-      onEdit={() => openEditGoal(goal)}
-      onToggleTask={(task) => toggleTask(goal, task)}
-      onEditTask={(task) => openTaskEditor(goal, task)}
-      onAddTask={(title) => addTask(goal, title)}
+      onToggleExpanded={toggleExpanded}
+      onEdit={openEditGoal}
+      onToggleTask={toggleTask}
+      onEditTask={openTaskEditor}
+      onAddTask={addTask}
     />
   )
 
@@ -310,7 +368,7 @@ export function GoalsView() {
             <p className="today-note">处理完，就把今天交还给自己。</p>
           </div>
           <ul className="today-list">
-            {todayEntries.map(({ goal, task }) => {
+            {shownToday.map(({ goal, task }) => {
               const tone = getDueTone(task.dueDate)
               return (
                 <li key={`${goal.id}-${task.id}`} className="today-task">
@@ -320,7 +378,7 @@ export function GoalsView() {
                     aria-checked={false}
                     aria-label={`完成「${task.title}」`}
                     className="task-check"
-                    onClick={() => toggleTask(goal, task)}
+                    onClick={() => toggleTask(goal.id, task.id)}
                   >
                     <Icon name="check" size={14} />
                   </button>
@@ -328,7 +386,7 @@ export function GoalsView() {
                     <button
                       type="button"
                       className="today-task-title"
-                      onClick={() => openTaskEditor(goal, task)}
+                      onClick={() => openTaskEditor(goal.id, task)}
                     >
                       {task.title}
                     </button>
@@ -346,6 +404,16 @@ export function GoalsView() {
               )
             })}
           </ul>
+          {todayEntries.length > TODAY_LIMIT ? (
+            <button
+              type="button"
+              className="today-more"
+              onClick={() => setTodayOpen((value) => !value)}
+              aria-expanded={todayOpen}
+            >
+              {todayOpen ? '先只看最要紧的' : `再看 ${todayEntries.length - TODAY_LIMIT} 件到期`}
+            </button>
+          ) : null}
         </section>
       ) : null}
 
@@ -378,7 +446,7 @@ export function GoalsView() {
           <button
             type="button"
             className={domainFilter === null ? 'filter-chip is-active' : 'filter-chip'}
-            onClick={() => setDomainFilter(null)}
+            onClick={() => chooseDomain(null)}
             aria-pressed={domainFilter === null}
           >
             全部
@@ -392,7 +460,7 @@ export function GoalsView() {
                 `domain-${domain.key}`,
                 domainFilter === domain.key && 'is-active',
               )}
-              onClick={() => setDomainFilter(domainFilter === domain.key ? null : domain.key)}
+              onClick={() => chooseDomain(domainFilter === domain.key ? null : domain.key)}
               aria-pressed={domainFilter === domain.key}
             >
               <span className="domain-dot" />
@@ -419,14 +487,27 @@ export function GoalsView() {
           body="换个类别看看，或者现在就立一个。"
           compact
         >
-          <Button variant="secondary" onClick={() => setDomainFilter(null)}>
+          <Button variant="secondary" onClick={() => chooseDomain(null)}>
             查看全部目标
           </Button>
         </EmptyState>
       ) : (
         <>
           {visibleActive.length ? (
-            <div className="goal-list">{visibleActive.map(renderGoal)}</div>
+            <>
+              <div className="goal-list">{shownActive.map(renderGoal)}</div>
+              {visibleActive.length > shownActive.length ? (
+                <div className="load-more">
+                  <Button
+                    variant="ghost"
+                    iconAfter="chevronDown"
+                    onClick={() => setVisibleCount((count) => count + PAGE_SIZE)}
+                  >
+                    再看 {visibleActive.length - shownActive.length} 个目标
+                  </Button>
+                </div>
+              ) : null}
+            </>
           ) : allCompleted ? (
             <div className="all-done-note">
               <span className="all-done-mark" aria-hidden="true">
@@ -464,9 +545,22 @@ export function GoalsView() {
                 </span>
               </button>
               {completedOpen ? (
-                <div className="goal-list goal-list-completed">
-                  {visibleCompleted.map(renderGoal)}
-                </div>
+                <>
+                  <div className="goal-list goal-list-completed">
+                    {shownCompleted.map(renderGoal)}
+                  </div>
+                  {visibleCompleted.length > shownCompleted.length ? (
+                    <div className="load-more">
+                      <Button
+                        variant="ghost"
+                        iconAfter="chevronDown"
+                        onClick={() => setVisibleCount((count) => count + PAGE_SIZE)}
+                      >
+                        再看 {visibleCompleted.length - shownCompleted.length} 个已达成
+                      </Button>
+                    </div>
+                  ) : null}
+                </>
               ) : null}
             </section>
           ) : null}

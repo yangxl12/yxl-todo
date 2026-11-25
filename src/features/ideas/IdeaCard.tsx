@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { Icon } from '../../components/Icon'
 import type { Idea } from '../../lib/types'
 import { formatNoteTime } from '../../lib/date'
@@ -7,10 +8,10 @@ interface IdeaCardProps {
   idea: Idea
   index: number
   isNew: boolean
-  onOpen: () => void
+  onOpen: (idea: Idea) => void
 }
 
-export function IdeaCard({ idea, index, isNew, onOpen }: IdeaCardProps) {
+export const IdeaCard = memo(function IdeaCard({ idea, index, isNew, onOpen }: IdeaCardProps) {
   const edited = idea.updatedAt - idea.createdAt > 60_000
 
   return (
@@ -19,11 +20,11 @@ export function IdeaCard({ idea, index, isNew, onOpen }: IdeaCardProps) {
       role="button"
       tabIndex={0}
       aria-label={`打开念头：${idea.text.slice(0, 40)}`}
-      onClick={onOpen}
+      onClick={() => onOpen(idea)}
       onKeyDown={(event) => {
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault()
-          onOpen()
+          onOpen(idea)
         }
       }}
     >
@@ -61,4 +62,4 @@ export function IdeaCard({ idea, index, isNew, onOpen }: IdeaCardProps) {
       </div>
     </article>
   )
-}
+})

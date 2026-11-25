@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Button } from '../../components/Button'
 import { Icon } from '../../components/Icon'
 import { Sheet } from '../../components/Modal'
@@ -7,6 +7,10 @@ import { useApp } from '../../lib/store'
 import type { Idea } from '../../lib/types'
 import { formatNoteTime } from '../../lib/date'
 import { AiPolishSheet } from './AiPolishSheet'
+
+// Long enough that continuous typing stays local, short enough that a pause
+// still lands the text in the store (and the local backup) on its own.
+const AUTOSAVE_MS = 700
 
 interface IdeaDetailSheetProps {
   idea: Idea | null
@@ -27,49 +31,97 @@ export function IdeaDetailSheet({
   const [body, setBody] = useState(idea?.text ?? '')
   const [aiOpen, setAiOpen] = useState(false)
   const [undoText, setUndoText] = useState<string | null>(null)
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const latestBody = useRef(body)
+  const latestIdea = useRef(idea)
+  const commitTimer = useRef<number | null>(null)
+  const resizeFrame = useRef<number | null>(null)
+
+  latestBody.current = body
+  latestIdea.current = idea
+
+  const commit = useCallback(
+    (text: string) => {
+      const current = latestIdea.current
+      if (!current || !text.trim() || text === current.text) return
+      dispatch({ type: 'idea/update', id: current.id, patch: { text } })
+    },
+    [dispatch],
+  )
+
+  const clearCommitTimer = useCallback(() => {
+    if (commitTimer.current !== null) {
+      window.clearTimeout(commitTimer.current)
+      commitTimer.current = null
+    }
+  }, [])
+
+  const flushBody = useCallback(
+    (text: string) => {
+      clearCommitTimer()
+      commit(text)
+    },
+    [clearCommitTimer, commit],
+  )
+
+  const scheduleCommit = useCallback(() => {
+    clearCommitTimer()
+    commitTimer.current = window.setTimeout(() => {
+      commitTimer.current = null
+      commit(latestBody.current)
+    }, AUTOSAVE_MS)
+  }, [clearCommitTimer, commit])
+
+  const applyHeight = useCallback(() => {
+    const element = textareaRef.current
+    if (!element) return
+    element.style.height = 'auto'
+    element.style.height = `${Math.min(element.scrollHeight, window.innerHeight * 0.58)}px`
+  }, [])
+
+  // Keystrokes only schedule one measurement per frame instead of forcing a
+  // synchronous layout inside every input event.
+  const queueResize = useCallback(() => {
+    if (resizeFrame.current !== null) return
+    resizeFrame.current = window.requestAnimationFrame(() => {
+      resizeFrame.current = null
+      applyHeight()
+    })
+  }, [applyHeight])
 
   useEffect(() => {
     if (open && idea) {
       setBody(idea.text)
       setUndoText(null)
+      setAiOpen(false)
+      clearCommitTimer()
+      queueResize()
+    } else {
+      setAiOpen(false)
     }
     // Re-sync only when opening or switching notes; typing is kept locally.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [idea?.id, open])
 
-  useEffect(() => {
-    if (!open) return
-    setAiOpen(false)
-    const frame = window.requestAnimationFrame(() => {
-      const element = textareaRef.current
-      if (!element) return
-      element.style.height = 'auto'
-      element.style.height = `${Math.min(element.scrollHeight, window.innerHeight * 0.58)}px`
-    })
-    return () => window.cancelAnimationFrame(frame)
-  }, [open, idea?.id])
+  useEffect(
+    () => () => {
+      clearCommitTimer()
+      if (resizeFrame.current !== null) window.cancelAnimationFrame(resizeFrame.current)
+    },
+    [clearCommitTimer],
+  )
 
   if (!idea) return null
-
-  const resize = (element: HTMLTextAreaElement | null) => {
-    if (!element) return
-    element.style.height = 'auto'
-    element.style.height = `${Math.min(element.scrollHeight, window.innerHeight * 0.58)}px`
-  }
 
   const updateBody = (next: string) => {
     setBody(next)
     setUndoText(null)
-    if (next.trim()) {
-      dispatch({ type: 'idea/update', id: idea.id, patch: { text: next } })
-    }
+    scheduleCommit()
+    queueResize()
   }
 
   const handleClose = () => {
-    if (body.trim() && body !== idea.text) {
-      dispatch({ type: 'idea/update', id: idea.id, patch: { text: body } })
-    }
+    flushBody(body)
     flushSave()
     onClose()
   }
@@ -136,6 +188,8 @@ export function IdeaDetailSheet({
                 dispatch({ type: 'idea/update', id: idea.id, patch: { text: undoText } })
                 setBody(undoText)
                 setUndoText(null)
+                clearCommitTimer()
+                queueResize()
               }}
             >
               撤回
@@ -144,17 +198,14 @@ export function IdeaDetailSheet({
         ) : null}
 
         <textarea
-          ref={(node) => {
-            textareaRef.current = node
-            resize(node)
-          }}
+          ref={textareaRef}
           className="idea-detail-text"
           value={body}
-          onChange={(event) => {
-            updateBody(event.target.value)
-            resize(event.currentTarget)
+          onChange={(event) => updateBody(event.target.value)}
+          onBlur={() => {
+            flushBody(latestBody.current)
+            queueResize()
           }}
-          onBlur={(event) => resize(event.currentTarget)}
           aria-label="念头正文"
           spellCheck
         />
@@ -185,6 +236,8 @@ export function IdeaDetailSheet({
           const previous = body
           setBody(next)
           setUndoText(previous)
+          clearCommitTimer()
+          queueResize()
           dispatch({ type: 'idea/update', id: idea.id, patch: { text: next } })
         }}
       />

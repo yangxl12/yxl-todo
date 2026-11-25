@@ -15,8 +15,10 @@ export function cleanAiText(text: string): string {
   return result.trim()
 }
 
+const numberFormatter = new Intl.NumberFormat('zh-CN')
+
 export function formatNumber(value: number): string {
-  return new Intl.NumberFormat('zh-CN').format(value)
+  return numberFormatter.format(value)
 }
 
 export function isStandalone(): boolean {
