@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Button, IconButton } from '../../components/Button'
 import { ConfirmSheet } from '../../components/ConfirmSheet'
 import { ChoiceSheet } from '../../components/ChoiceSheet'
@@ -38,6 +39,7 @@ export function IdeasView() {
   const [searchOpen, setSearchOpen] = useState(false)
   const [activeTag, setActiveTag] = useState<string | null>(null)
   const [sortOpen, setSortOpen] = useState(false)
+  const [composerOpen, setComposerOpen] = useState(false)
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
   const [selectedIdea, setSelectedIdea] = useState<Idea | null>(null)
   const [detailOpen, setDetailOpen] = useState(false)
@@ -106,12 +108,6 @@ export function IdeasView() {
     setDetailOpen(true)
   }, [])
 
-  const focusComposer = () => {
-    const textarea = document.getElementById('idea-composer')
-    textarea?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    window.setTimeout(() => textarea?.focus(), 250)
-  }
-
   const requestDelete = (idea: Idea) => {
     setDetailOpen(false)
     setPendingDelete(idea)
@@ -135,32 +131,25 @@ export function IdeasView() {
     setSearchOpen(false)
   }
 
+  const openComposer = () => setComposerOpen(true)
+
+  const handleSaved = (id: string) => {
+    setLastAddedId(id)
+    setQuery('')
+    setSearchOpen(false)
+    setActiveTag(null)
+    setVisibleCount(PAGE_SIZE)
+    setComposerOpen(false)
+  }
+
   return (
     <div className="ideas-view">
       <h1 className="sr-only">念头</h1>
-
-      <IdeaComposer
-        allTags={allTags}
-        onSaved={(id) => {
-          setLastAddedId(id)
-          setQuery('')
-          setSearchOpen(false)
-          setActiveTag(null)
-          setVisibleCount(PAGE_SIZE)
-        }}
-      />
 
       <section className="ideas-stream" aria-labelledby="ideas-stream-title">
         <div className="ideas-toolbar">
           <div className="ideas-toolbar-title">
             <h2 id="ideas-stream-title">留下的念头</h2>
-            {data.ideas.length ? (
-              <p className="section-summary">
-                {hasFilters
-                  ? `筛出 ${sortedIdeas.length} 则 · 共 ${data.ideas.length} 则`
-                  : `共 ${data.ideas.length} 则`}
-              </p>
-            ) : null}
           </div>
           <div className="ideas-tools">
             <button
@@ -239,7 +228,7 @@ export function IdeasView() {
             title="纸上还空着"
             body="第一念不必完整。一句疑惑、一个想试的方向，先让它落下来。"
           >
-            <Button variant="secondary" icon="feather" onClick={focusComposer}>
+            <Button variant="secondary" icon="feather" onClick={openComposer}>
               写下第一念
             </Button>
           </EmptyState>
@@ -286,6 +275,32 @@ export function IdeasView() {
           </>
         )}
       </section>
+
+      {createPortal(
+        <button
+          type="button"
+          className="idea-fab"
+          onClick={openComposer}
+          aria-label="新增念头"
+          title="新增念头"
+        >
+          <span className="idea-fab-glyph" aria-hidden="true">
+            记
+          </span>
+          <span className="idea-fab-plus" aria-hidden="true">
+            <Icon name="plus" size={12} />
+          </span>
+        </button>,
+        document.body,
+      )}
+
+      <IdeaComposer
+        open={composerOpen}
+        allTags={allTags}
+        onClose={() => setComposerOpen(false)}
+        onSaved={handleSaved}
+        onReopen={openComposer}
+      />
 
       <IdeaDetailSheet
         idea={activeIdea}

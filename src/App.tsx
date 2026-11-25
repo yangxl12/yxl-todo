@@ -98,12 +98,6 @@ function AppContent() {
               {tab === 'goals' ? <GoalsView /> : null}
               {tab === 'fire' ? <FireView /> : null}
             </div>
-            <footer className="site-foot">
-              <span className="site-foot-mark" aria-hidden="true">
-                拾
-              </span>
-              <p>念头、步子与火，都留在此设备。</p>
-            </footer>
           </main>
         </div>
       </div>

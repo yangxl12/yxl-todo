@@ -37,6 +37,13 @@ export function formatNoteTime(ts: number): string {
   return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`
 }
 
+// The detail sheet is the one place that has to state the exact moment a
+// thought was last put down, so it keeps the full year, month, day and time.
+export function formatRecordTime(ts: number): string {
+  const date = new Date(ts)
+  return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日 ${formatTime(ts)}`
+}
+
 export function formatDueDate(key: string | null): string {
   if (!key) return ''
   const date = parseDateKey(key)

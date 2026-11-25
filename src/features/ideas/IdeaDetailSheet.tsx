@@ -5,7 +5,7 @@ import { Sheet } from '../../components/Modal'
 import { TagEditor } from '../../components/TagEditor'
 import { useApp } from '../../lib/store'
 import type { Idea } from '../../lib/types'
-import { formatNoteTime } from '../../lib/date'
+import { formatRecordTime } from '../../lib/date'
 import { AiPolishSheet } from './AiPolishSheet'
 
 // Long enough that continuous typing stays local, short enough that a pause
@@ -126,18 +126,32 @@ export function IdeaDetailSheet({
     onClose()
   }
 
-  const edited = idea.updatedAt - idea.createdAt > 60_000
-
   return (
     <>
       <Sheet
         open={open}
         onClose={handleClose}
-        title="一个念头"
-        subtitle={`记于 ${formatNoteTime(idea.createdAt)}${edited ? ` · 改于 ${formatNoteTime(idea.updatedAt)}` : ''} · 自动保存`}
+        title="念头详情"
         titleId="idea-detail-title"
         panelClassName="idea-detail-sheet"
         bodyClassName="idea-detail-body"
+        headContent={
+          <div className="idea-detail-head">
+            <span className="idea-detail-record">
+              <span className="idea-detail-record-label">最后记录</span>
+              <time dateTime={new Date(idea.updatedAt).toISOString()}>
+                {formatRecordTime(idea.updatedAt)}
+              </time>
+            </span>
+            {idea.pinned ? (
+              <span className="idea-detail-pin">
+                <Icon name="pin" size={12} filled />
+                已置顶
+              </span>
+            ) : null}
+            <span className="idea-detail-count">{body.trim().length} 字</span>
+          </div>
+        }
         footer={
           <div className="idea-detail-actions">
             <div className="idea-detail-sub-actions">
@@ -169,14 +183,6 @@ export function IdeaDetailSheet({
           </div>
         }
       >
-        <div className="idea-detail-meta">
-          <span className={idea.pinned ? 'detail-state is-pinned' : 'detail-state'}>
-            <span className="detail-state-dot" />
-            {idea.pinned ? '留在最前' : '未置顶'}
-          </span>
-          <span>{body.trim().length} 字</span>
-        </div>
-
         {undoText !== null ? (
           <div className="inline-undo">
             <Icon name="spark" size={14} />

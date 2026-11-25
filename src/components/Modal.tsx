@@ -113,6 +113,8 @@ interface SheetProps {
   onClose: () => void
   title: ReactNode
   subtitle?: ReactNode
+  /** Replaces the title block while keeping the close button on the right. */
+  headContent?: ReactNode
   children: ReactNode
   footer?: ReactNode
   titleId: string
@@ -127,6 +129,7 @@ export function Sheet({
   onClose,
   title,
   subtitle,
+  headContent,
   children,
   footer,
   titleId,
@@ -145,12 +148,21 @@ export function Sheet({
     >
       <div className="sheet-grabber" aria-hidden="true" />
       <header className="sheet-head">
-        <div className="sheet-heading">
-          <h2 id={titleId} className="sheet-title">
-            {title}
-          </h2>
-          {subtitle ? <p className="sheet-subtitle">{subtitle}</p> : null}
-        </div>
+        {headContent ? (
+          <div className="sheet-heading sheet-heading-custom">
+            <h2 id={titleId} className="sr-only">
+              {title}
+            </h2>
+            {headContent}
+          </div>
+        ) : (
+          <div className="sheet-heading">
+            <h2 id={titleId} className="sheet-title">
+              {title}
+            </h2>
+            {subtitle ? <p className="sheet-subtitle">{subtitle}</p> : null}
+          </div>
+        )}
         <IconButton label={closeLabel} icon="close" onClick={onClose} />
       </header>
       <div className={cx('sheet-body', bodyClassName)}>{children}</div>

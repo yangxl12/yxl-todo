@@ -1,4 +1,6 @@
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { Button } from '../../components/Button'
+import { Sheet } from '../../components/Modal'
 import { useApp } from '../../lib/store'
 import { useToast } from '../../components/Toast'
 import { Icon } from '../../components/Icon'
@@ -9,11 +11,14 @@ import type { Idea } from '../../lib/types'
 import { cx, isMac } from '../../lib/utils'
 
 interface IdeaComposerProps {
+  open: boolean
   allTags: string[]
+  onClose: () => void
   onSaved: (id: string) => void
+  onReopen: () => void
 }
 
-export function IdeaComposer({ allTags, onSaved }: IdeaComposerProps) {
+export function IdeaComposer({ open, allTags, onClose, onSaved, onReopen }: IdeaComposerProps) {
   const { dispatch } = useApp()
   const { showToast } = useToast()
   const [initialDraft] = useState(loadDraft)
@@ -23,7 +28,6 @@ export function IdeaComposer({ allTags, onSaved }: IdeaComposerProps) {
   const [restored, setRestored] = useState(Boolean(initialDraft))
   const [aiOpen, setAiOpen] = useState(false)
   const [aiUndo, setAiUndo] = useState<string | null>(null)
-  const [focused, setFocused] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
@@ -48,6 +52,16 @@ export function IdeaComposer({ allTags, onSaved }: IdeaComposerProps) {
     return () => window.removeEventListener('shiyan:data-changed', onDataChanged)
   }, [])
 
+  // The sheet mounts its children one frame after `open` flips, so focus is
+  // handed over once the textarea actually exists.
+  useEffect(() => {
+    if (!open) return
+    const timer = window.setTimeout(() => {
+      textareaRef.current?.focus({ preventScroll: true })
+    }, 120)
+    return () => window.clearTimeout(timer)
+  }, [open])
+
   const reset = () => {
     setText('')
     setTags([])
@@ -57,8 +71,7 @@ export function IdeaComposer({ allTags, onSaved }: IdeaComposerProps) {
     clearDraft()
   }
 
-  const submit = (event?: FormEvent) => {
-    event?.preventDefault()
+  const submit = () => {
     const cleaned = text.trim()
     if (!cleaned) {
       textareaRef.current?.focus()
@@ -85,10 +98,9 @@ export function IdeaComposer({ allTags, onSaved }: IdeaComposerProps) {
         setText(cleaned)
         setTags(tags)
         setShowTags(Boolean(tags.length))
-        window.setTimeout(() => textareaRef.current?.focus(), 50)
+        onReopen()
       },
     })
-    window.setTimeout(() => textareaRef.current?.focus(), 50)
   }
 
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -105,78 +117,17 @@ export function IdeaComposer({ allTags, onSaved }: IdeaComposerProps) {
 
   return (
     <>
-      <section className={cx('composer', focused && 'is-focused')} aria-labelledby="composer-heading">
-        <div className="composer-head">
-          <div className="composer-title-group">
-            <span className="composer-mark" aria-hidden="true">
-              记
-            </span>
-            <h2 className="composer-title" id="composer-heading">
-              此刻的念头
-            </h2>
-          </div>
-          <span className="composer-rule" aria-hidden="true" />
-          <span className="composer-date">只在此设备</span>
-        </div>
-
-        <form onSubmit={submit}>
-          <label className="sr-only" htmlFor="idea-composer">
-            写下一个念头
-          </label>
-          <textarea
-            ref={textareaRef}
-            id="idea-composer"
-            className="composer-textarea"
-            value={text}
-            onChange={(event) => changeText(event.target.value)}
-            onFocus={() => setFocused(true)}
-            onBlur={() => setFocused(false)}
-            onKeyDown={onKeyDown}
-            placeholder="此刻在想什么？先写下来，不求完整。"
-            rows={2}
-            enterKeyHint="enter"
-          />
-
-          {restored && text.trim() ? (
-            <div className="composer-restore">
-              <Icon name="clock" size={14} />
-              <span>已找回上次没写完的草稿</span>
-              <button type="button" onClick={() => setRestored(false)}>
-                知道了
-              </button>
-            </div>
-          ) : null}
-
-          {aiUndo !== null ? (
-            <div className="inline-undo">
-              <Icon name="spark" size={14} />
-              <span>已换成润色后的文字</span>
-              <button
-                type="button"
-                onClick={() => {
-                  setText(aiUndo)
-                  setAiUndo(null)
-                }}
-              >
-                撤回
-              </button>
-            </div>
-          ) : null}
-
-          {showTags ? (
-            <div className="composer-tags">
-              <TagEditor
-                value={tags}
-                onChange={setTags}
-                suggestions={allTags}
-                compact
-                placeholder="加标签，回车确认"
-              />
-            </div>
-          ) : null}
-
-          <div className="composer-actions">
-            <div className="composer-tools">
+      <Sheet
+        open={open}
+        onClose={onClose}
+        title="此刻的念头"
+        subtitle="只在此设备，草稿会自动留住。"
+        titleId="idea-composer-title"
+        panelClassName="idea-composer-sheet"
+        bodyClassName="idea-composer-body"
+        footer={
+          <div className="composer-foot">
+            <div className="composer-foot-tools">
               <button
                 type="button"
                 className={cx('tool-button', showTags && 'is-active')}
@@ -187,28 +138,79 @@ export function IdeaComposer({ allTags, onSaved }: IdeaComposerProps) {
                 <span>{tags.length ? `${tags.length} 个标签` : '标签'}</span>
               </button>
               {text.trim() ? (
-                <button
-                  type="button"
-                  className="tool-button tool-ai"
-                  onClick={() => setAiOpen(true)}
-                >
+                <button type="button" className="tool-button tool-ai" onClick={() => setAiOpen(true)}>
                   <Icon name="spark" size={16} />
                   <span>AI 润色</span>
                 </button>
               ) : null}
             </div>
-            <div className="composer-submit">
+            <div className="composer-foot-submit">
               <span className="keyboard-hint" aria-hidden="true">
                 {isMac() ? '⌘ ↵' : 'Ctrl ↵'}
               </span>
-              <button type="submit" className="btn btn-primary composer-save" disabled={!text.trim()}>
-                <span>收下</span>
-                <Icon name="arrowRight" size={16} />
-              </button>
+              <Button
+                variant="primary"
+                iconAfter="arrowRight"
+                onClick={submit}
+                disabled={!text.trim()}
+              >
+                收下
+              </Button>
             </div>
           </div>
-        </form>
-      </section>
+        }
+      >
+        <label className="sr-only" htmlFor="idea-composer">
+          写下一个念头
+        </label>
+        <textarea
+          ref={textareaRef}
+          id="idea-composer"
+          className="idea-composer-text"
+          value={text}
+          onChange={(event) => changeText(event.target.value)}
+          onKeyDown={onKeyDown}
+          placeholder="此刻在想什么？先写下来，不求完整。"
+          rows={5}
+        />
+
+        {restored && text.trim() ? (
+          <div className="composer-restore">
+            <Icon name="clock" size={14} />
+            <span>已找回上次没写完的草稿</span>
+            <button type="button" onClick={() => setRestored(false)}>
+              知道了
+            </button>
+          </div>
+        ) : null}
+
+        {aiUndo !== null ? (
+          <div className="inline-undo">
+            <Icon name="spark" size={14} />
+            <span>已换成润色后的文字</span>
+            <button
+              type="button"
+              onClick={() => {
+                setText(aiUndo)
+                setAiUndo(null)
+              }}
+            >
+              撤回
+            </button>
+          </div>
+        ) : null}
+
+        {showTags ? (
+          <div className="composer-tags">
+            <TagEditor
+              value={tags}
+              onChange={setTags}
+              suggestions={allTags}
+              placeholder="加标签，回车确认"
+            />
+          </div>
+        ) : null}
+      </Sheet>
 
       <AiPolishSheet
         open={aiOpen}

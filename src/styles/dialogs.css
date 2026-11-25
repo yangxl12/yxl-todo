@@ -67,6 +67,13 @@
   padding-top: 3px;
 }
 
+.sheet-heading-custom {
+  display: flex;
+  align-items: center;
+  min-height: 40px;
+  padding-top: 0;
+}
+
 .sheet-title {
   margin-top: 8px;
   font-family: var(--font-serif);
