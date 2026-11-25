@@ -54,8 +54,7 @@ export function TaskEditorSheet({
       open={open}
       onClose={onClose}
       title="安排这一步"
-      eyebrow={`TASK · ${DOMAIN_MAP[goal.domain].label}`}
-      subtitle={`在目标「${goal.title}」之下`}
+      subtitle={`${DOMAIN_MAP[goal.domain].label} · 在目标「${goal.title}」之下`}
       titleId="task-editor-title"
       panelClassName="sheet-small task-editor-sheet"
       footer={

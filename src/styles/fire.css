@@ -1,5 +1,5 @@
 .daily-ember-wrap {
-  margin: 3px 0 32px;
+  margin: 0 0 32px;
 }
 
 .daily-ember-heading {
@@ -11,7 +11,6 @@
 }
 
 .daily-ember-heading h2 {
-  margin-top: 4px;
   font-family: var(--font-serif);
   font-size: 24px;
   font-weight: 500;
@@ -350,7 +349,6 @@
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
   flex: 0 0 auto;
   min-height: 46px;
   padding: 0 11px;
@@ -385,17 +383,6 @@
   transform: scaleX(1);
 }
 
-.fire-tab span {
-  font-family: var(--font-display);
-  font-size: 8px;
-  color: var(--ink-ghost);
-  font-variant-numeric: tabular-nums;
-}
-
-.fire-tab.is-active span {
-  color: var(--vermilion);
-}
-
 .fire-section {
   margin-top: 31px;
 }
@@ -409,7 +396,6 @@
 }
 
 .fire-section-head h2 {
-  margin-top: 4px;
   font-family: var(--font-serif);
   font-size: 23px;
   font-weight: 500;

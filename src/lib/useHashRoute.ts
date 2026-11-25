@@ -6,12 +6,11 @@ export const TABS: Array<{
   key: TabKey
   label: string
   english: string
-  mark: string
   title: string
 }> = [
-  { key: 'ideas', label: '念头', english: 'THOUGHTS', mark: '念', title: '拾焰 · 念头' },
-  { key: 'goals', label: '目标', english: 'MOMENTUM', mark: '行', title: '拾焰 · 目标' },
-  { key: 'fire', label: '火种', english: 'KINDLING', mark: '焰', title: '拾焰 · 火种' },
+  { key: 'ideas', label: '念头', english: 'THOUGHTS', title: '拾焰 · 念头' },
+  { key: 'goals', label: '目标', english: 'MOMENTUM', title: '拾焰 · 目标' },
+  { key: 'fire', label: '火种', english: 'KINDLING', title: '拾焰 · 火种' },
 ]
 
 function readHash(): TabKey {

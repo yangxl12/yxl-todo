@@ -66,7 +66,6 @@ export function GoalEditorSheet({
       open={open}
       onClose={onClose}
       title={mode === 'create' ? '立下一个目标' : '整理这个目标'}
-      eyebrow={mode === 'create' ? 'A NEW DIRECTION' : 'GOAL SETTINGS'}
       subtitle={mode === 'create' ? '先写方向，下一步可以慢慢补。' : '把方向调准确，再继续走。'}
       titleId="goal-editor-title"
       panelClassName="goal-editor-sheet"

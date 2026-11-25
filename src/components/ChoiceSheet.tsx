@@ -12,7 +12,7 @@ interface ChoiceSheetProps<T extends string> {
   open: boolean
   onClose: () => void
   title: string
-  eyebrow?: string
+  subtitle?: string
   options: Array<ChoiceOption<T>>
   value: T
   onChange: (value: T) => void
@@ -23,7 +23,7 @@ export function ChoiceSheet<T extends string>({
   open,
   onClose,
   title,
-  eyebrow,
+  subtitle,
   options,
   value,
   onChange,
@@ -34,7 +34,7 @@ export function ChoiceSheet<T extends string>({
       open={open}
       onClose={onClose}
       title={title}
-      eyebrow={eyebrow}
+      subtitle={subtitle}
       titleId={titleId}
       panelClassName="sheet-small"
     >

@@ -4,7 +4,6 @@ import { ConfirmSheet } from '../../components/ConfirmSheet'
 import { ChoiceSheet } from '../../components/ChoiceSheet'
 import { EmptyState } from '../../components/EmptyState'
 import { Icon } from '../../components/Icon'
-import { PageHeader } from '../../components/PageHeader'
 import { useToast } from '../../components/Toast'
 import { IDEA_SORTS } from '../../lib/domains'
 import { useApp } from '../../lib/store'
@@ -138,19 +137,7 @@ export function IdeasView() {
 
   return (
     <div className="ideas-view">
-      <PageHeader
-        index="01"
-        english="THOUGHTS"
-        mark="念"
-        title="念头"
-        tagline="先收下，再慢慢看清楚。"
-        aside={
-          <div className="page-stat" aria-label={`已记下 ${data.ideas.length} 则念头`}>
-            <strong>{String(data.ideas.length).padStart(2, '0')}</strong>
-            <span>则已收下</span>
-          </div>
-        }
-      />
+      <h1 className="sr-only">念头</h1>
 
       <IdeaComposer
         allTags={allTags}
@@ -166,11 +153,14 @@ export function IdeasView() {
       <section className="ideas-stream" aria-labelledby="ideas-stream-title">
         <div className="ideas-toolbar">
           <div className="ideas-toolbar-title">
-            <p className="section-eyebrow">YOUR NOTES</p>
-            <h2 id="ideas-stream-title">
-              留下的念头
-              <span className="inline-count">{sortedIdeas.length}</span>
-            </h2>
+            <h2 id="ideas-stream-title">留下的念头</h2>
+            {data.ideas.length ? (
+              <p className="section-summary">
+                {hasFilters
+                  ? `筛出 ${sortedIdeas.length} 则 · 共 ${data.ideas.length} 则`
+                  : `共 ${data.ideas.length} 则`}
+              </p>
+            ) : null}
           </div>
           <div className="ideas-tools">
             <button
@@ -312,7 +302,7 @@ export function IdeasView() {
         open={sortOpen}
         onClose={() => setSortOpen(false)}
         title="念头怎么排"
-        eyebrow="顺序也是整理"
+        subtitle="顺序也是整理"
         titleId="idea-sort-title"
         options={IDEA_SORTS}
         value={data.prefs.ideaSort}

@@ -22,11 +22,6 @@ export function formatFullDate(date = new Date()): string {
   return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日 · ${WEEKDAYS[date.getDay()]}`
 }
 
-export function formatMonthDay(ts: number): string {
-  const date = new Date(ts)
-  return `${pad(date.getMonth() + 1)}.${pad(date.getDate())}`
-}
-
 export function formatTime(ts: number): string {
   const date = new Date(ts)
   return `${pad(date.getHours())}:${pad(date.getMinutes())}`

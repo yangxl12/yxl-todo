@@ -111,12 +111,9 @@ export function IdeaComposer({ allTags, onSaved }: IdeaComposerProps) {
             <span className="composer-mark" aria-hidden="true">
               记
             </span>
-            <div>
-              <p className="composer-kicker">A NEW THOUGHT</p>
-              <h2 className="composer-title" id="composer-heading">
-                此刻的念头
-              </h2>
-            </div>
+            <h2 className="composer-title" id="composer-heading">
+              此刻的念头
+            </h2>
           </div>
           <span className="composer-rule" aria-hidden="true" />
           <span className="composer-date">只在此设备</span>

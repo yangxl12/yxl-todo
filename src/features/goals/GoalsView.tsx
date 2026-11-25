@@ -4,7 +4,6 @@ import { ChoiceSheet } from '../../components/ChoiceSheet'
 import { ConfirmSheet } from '../../components/ConfirmSheet'
 import { EmptyState } from '../../components/EmptyState'
 import { Icon } from '../../components/Icon'
-import { PageHeader } from '../../components/PageHeader'
 import { useToast } from '../../components/Toast'
 import { DOMAINS, GOAL_SORTS } from '../../lib/domains'
 import { useApp } from '../../lib/store'
@@ -329,28 +328,7 @@ export function GoalsView() {
 
   return (
     <div className="goals-view">
-      <PageHeader
-        index="02"
-        english="MOMENTUM"
-        mark="行"
-        title="目标"
-        tagline="把想成为的样子，拆成今天能走的一步。"
-        aside={
-          <div className="page-stat page-stat-wide" aria-label="目标概况">
-            <div className="page-stat-main">
-              <strong>{String(activeGoals.length).padStart(2, '0')}</strong>
-              <span>个目标在走</span>
-            </div>
-            <div className="page-stat-sub">
-              <span>
-                {counts.done} / {counts.total} 步已完成
-              </span>
-              <span className="stat-separator" />
-              <span>{todayCount ? `${todayCount} 件今天落地` : '今天没有到期项'}</span>
-            </div>
-          </div>
-        }
-      />
+      <h1 className="sr-only">目标</h1>
 
       {todayEntries.length ? (
         <section className="today-strip" aria-labelledby="today-strip-title">
@@ -358,11 +336,8 @@ export function GoalsView() {
             <div className="today-title-wrap">
               <span className="today-sun" aria-hidden="true" />
               <div>
-                <p className="section-eyebrow">DUE TODAY</p>
-                <h2 id="today-strip-title">
-                  今天落地
-                  <span className="inline-count">{todayCount}</span>
-                </h2>
+                <h2 id="today-strip-title">今天落地</h2>
+                <p className="today-summary">今天有 {todayCount} 件到期，先挑一件开始。</p>
               </div>
             </div>
             <p className="today-note">处理完，就把今天交还给自己。</p>
@@ -419,11 +394,14 @@ export function GoalsView() {
 
       <div className="goals-toolbar">
         <div className="goals-toolbar-title">
-          <p className="section-eyebrow">DIRECTIONS</p>
-          <h2>
-            目标清单
-            <span className="inline-count">{visibleActive.length + visibleCompleted.length}</span>
-          </h2>
+          <h2>目标清单</h2>
+          {activeGoals.length ? (
+            <p className="section-summary">
+              {activeGoals.length} 个在走 · {counts.done} / {counts.total} 步完成
+            </p>
+          ) : allCompleted ? (
+            <p className="section-summary">{completedGoals.length} 个目标已达成</p>
+          ) : null}
         </div>
         <div className="goals-tools">
           <button
@@ -533,7 +511,6 @@ export function GoalsView() {
                     成
                   </span>
                   已达成
-                  <span className="inline-count">{visibleCompleted.length}</span>
                 </span>
                 <span className="achieved-hint">
                   {completedOpen ? '收起来' : '看看走过的路'}
@@ -604,7 +581,7 @@ export function GoalsView() {
         open={sortOpen}
         onClose={() => setSortOpen(false)}
         title="目标怎么排"
-        eyebrow="先看见更该走的那条"
+        subtitle="先看见更该走的那条"
         titleId="goal-sort-title"
         options={GOAL_SORTS}
         value={data.prefs.goalSort}

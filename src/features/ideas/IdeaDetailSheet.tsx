@@ -134,8 +134,7 @@ export function IdeaDetailSheet({
         open={open}
         onClose={handleClose}
         title="一个念头"
-        eyebrow="THOUGHT · 自动保存"
-        subtitle={`记于 ${formatNoteTime(idea.createdAt)}${edited ? ` · 改于 ${formatNoteTime(idea.updatedAt)}` : ''}`}
+        subtitle={`记于 ${formatNoteTime(idea.createdAt)}${edited ? ` · 改于 ${formatNoteTime(idea.updatedAt)}` : ''} · 自动保存`}
         titleId="idea-detail-title"
         panelClassName="idea-detail-sheet"
         bodyClassName="idea-detail-body"

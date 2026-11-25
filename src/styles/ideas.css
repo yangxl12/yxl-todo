@@ -53,17 +53,9 @@
   transform: rotate(-2deg);
 }
 
-.composer-kicker {
-  font-family: var(--font-display);
-  font-size: 7px;
-  letter-spacing: 0.18em;
-  line-height: 1.5;
-  color: var(--ink-faint);
-}
-
 .composer-title {
   font-family: var(--font-serif);
-  font-size: 15px;
+  font-size: 17px;
   font-weight: 500;
   line-height: 1.4;
   letter-spacing: 0.08em;
@@ -218,7 +210,6 @@
 
 .ideas-toolbar-title h2,
 .goals-toolbar-title h2 {
-  margin-top: 4px;
   font-family: var(--font-serif);
   font-size: 24px;
   font-weight: 500;

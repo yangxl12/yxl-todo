@@ -1,7 +1,7 @@
 /* Today focus */
 .today-strip {
   position: relative;
-  margin: 4px 0 29px;
+  margin: 0 0 29px;
   padding: 20px 18px 11px;
   border-radius: 4px;
   overflow: hidden;
@@ -49,13 +49,7 @@
   box-shadow: 0 0 22px rgba(203, 96, 61, 0.25);
 }
 
-.today-strip .section-eyebrow {
-  color: var(--today-muted);
-  font-size: 8px;
-}
-
 .today-strip h2 {
-  margin-top: 3px;
   font-family: var(--font-serif);
   font-size: 22px;
   font-weight: 500;
@@ -63,9 +57,13 @@
   line-height: 1.35;
 }
 
-.today-strip .inline-count {
-  border-color: var(--today-line);
+.today-summary {
+  margin-top: 4px;
   color: var(--today-muted);
+  font-family: var(--font-serif);
+  font-size: 10.5px;
+  line-height: 1.7;
+  letter-spacing: 0.03em;
 }
 
 .today-note {

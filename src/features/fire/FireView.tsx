@@ -2,7 +2,6 @@ import { memo, useMemo, useState } from 'react'
 import { Button } from '../../components/Button'
 import { EmptyState } from '../../components/EmptyState'
 import { Icon } from '../../components/Icon'
-import { PageHeader } from '../../components/PageHeader'
 import {
   FIRE_ITEMS,
   getDailyFireIndex,
@@ -10,7 +9,7 @@ import {
   type FireMethod,
   type FireQuote,
 } from '../../lib/fireContent'
-import { daysSinceEpoch, formatMonthDay } from '../../lib/date'
+import { daysSinceEpoch } from '../../lib/date'
 import { useApp } from '../../lib/store'
 import { cx } from '../../lib/utils'
 
@@ -84,23 +83,12 @@ function ScienceDetails({ item }: { item: FireMethod }) {
   )
 }
 
-function DailyEmber({
-  item,
-  dayLabel,
-  onSwap,
-}: {
-  item: FireItem
-  dayLabel: string
-  onSwap: () => void
-}) {
+function DailyEmber({ item, onSwap }: { item: FireItem; onSwap: () => void }) {
   const isMethod = item.kind === 'method'
   return (
     <section className="daily-ember-wrap" aria-labelledby="daily-ember-title">
       <div className="daily-ember-heading">
-        <div>
-          <p className="section-eyebrow">TODAY'S EMBER · {dayLabel}</p>
-          <h2 id="daily-ember-title">今日一焰</h2>
-        </div>
+        <h2 id="daily-ember-title">今日一焰</h2>
         <div className="daily-ember-actions">
           <FavoriteButton itemId={item.id} label="收下这一焰" />
           <button type="button" className="swap-button" onClick={onSwap}>
@@ -243,47 +231,22 @@ export function FireView() {
 
   return (
     <div className="fire-view">
-      <PageHeader
-        index="03"
-        english="KINDLING"
-        mark="焰"
-        title="火种"
-        tagline="不是等有动力才开始，而是开始了，动力才慢慢跟上来。"
-        aside={
-          <div className="page-stat" aria-label={`收藏了 ${savedTotal} 簇火种`}>
-            <strong>{String(savedTotal).padStart(2, '0')}</strong>
-            <span>簇已收好</span>
-          </div>
-        }
-      />
+      <h1 className="sr-only">火种</h1>
 
-      {filter === 'all' ? (
-        <DailyEmber item={activeHero} dayLabel={formatMonthDay(Date.now())} onSwap={swap} />
-      ) : null}
+      {filter === 'all' ? <DailyEmber item={activeHero} onSwap={swap} /> : null}
 
       <div className="fire-tabs" role="group" aria-label="火种分类">
-        {FILTERS.map((item) => {
-          const count =
-            item.value === 'all'
-              ? FIRE_ITEMS.length
-              : item.value === 'method'
-                ? methods.length
-                : item.value === 'quote'
-                  ? quotes.length
-                  : savedTotal
-          return (
-            <button
-              key={item.value}
-              type="button"
-              aria-pressed={filter === item.value}
-              className={cx('fire-tab', filter === item.value && 'is-active')}
-              onClick={() => setFilter(item.value)}
-            >
-              {item.label}
-              <span>{count}</span>
-            </button>
-          )
-        })}
+        {FILTERS.map((item) => (
+          <button
+            key={item.value}
+            type="button"
+            aria-pressed={filter === item.value}
+            className={cx('fire-tab', filter === item.value && 'is-active')}
+            onClick={() => setFilter(item.value)}
+          >
+            {item.label}
+          </button>
+        ))}
       </div>
 
       {nothingSaved ? (
@@ -302,13 +265,7 @@ export function FireView() {
           {showMethods && visibleMethodList.length ? (
             <section className="fire-section" aria-labelledby="fire-methods-title">
               <div className="fire-section-head">
-                <div>
-                  <p className="section-eyebrow">METHODS & EVIDENCE</p>
-                  <h2 id="fire-methods-title">
-                    方法与证据
-                    <span className="inline-count">{visibleMethodList.length}</span>
-                  </h2>
-                </div>
+                <h2 id="fire-methods-title">方法与证据</h2>
                 <p className="fire-section-note">能上手，也有出处。</p>
               </div>
               <div className="fire-grid">
@@ -322,13 +279,7 @@ export function FireView() {
           {showQuotes && visibleQuoteList.length ? (
             <section className="fire-section" aria-labelledby="fire-quotes-title">
               <div className="fire-section-head">
-                <div>
-                  <p className="section-eyebrow">WORDS TO KEEP</p>
-                  <h2 id="fire-quotes-title">
-                    留下的燃句
-                    <span className="inline-count">{visibleQuoteList.length}</span>
-                  </h2>
-                </div>
+                <h2 id="fire-quotes-title">留下的燃句</h2>
                 <p className="fire-section-note">替说不出口的那部分，说一句。</p>
               </div>
               <div className="quote-grid">

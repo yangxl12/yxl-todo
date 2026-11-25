@@ -112,7 +112,6 @@ interface SheetProps {
   open: boolean
   onClose: () => void
   title: ReactNode
-  eyebrow?: ReactNode
   subtitle?: ReactNode
   children: ReactNode
   footer?: ReactNode
@@ -127,7 +126,6 @@ export function Sheet({
   open,
   onClose,
   title,
-  eyebrow,
   subtitle,
   children,
   footer,
@@ -148,7 +146,6 @@ export function Sheet({
       <div className="sheet-grabber" aria-hidden="true" />
       <header className="sheet-head">
         <div className="sheet-heading">
-          {eyebrow ? <p className="sheet-eyebrow">{eyebrow}</p> : null}
           <h2 id={titleId} className="sheet-title">
             {title}
           </h2>

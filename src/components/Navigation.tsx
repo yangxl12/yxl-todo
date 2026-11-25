@@ -21,7 +21,7 @@ export function BottomNav({
   return (
     <nav className="bottom-nav" aria-label="主导航">
       <div className="bottom-nav-inner">
-        {TABS.map((tab, index) => (
+        {TABS.map((tab) => (
           <button
             key={tab.key}
             type="button"
@@ -33,7 +33,6 @@ export function BottomNav({
               <Icon name={TAB_ICONS[tab.key]} size={20} filled={active === tab.key && tab.key === 'fire'} />
             </span>
             <span className="bottom-nav-label">{tab.label}</span>
-            <span className="bottom-nav-index">{String(index + 1).padStart(2, '0')}</span>
           </button>
         ))}
       </div>
@@ -62,7 +61,7 @@ export function SideRail({
       </div>
 
       <nav className="rail-nav" aria-label="主导航">
-        {TABS.map((tab, index) => (
+        {TABS.map((tab) => (
           <button
             key={tab.key}
             type="button"
@@ -70,7 +69,6 @@ export function SideRail({
             onClick={() => onNavigate(tab.key)}
             aria-current={active === tab.key ? 'page' : undefined}
           >
-            <span className="rail-nav-number">{String(index + 1).padStart(2, '0')}</span>
             <span className="rail-nav-copy">
               <span className="rail-nav-label">{tab.label}</span>
               <span className="rail-nav-en">{tab.english}</span>

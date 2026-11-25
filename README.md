@@ -131,7 +131,7 @@ npm run typecheck
 
 ```
 src/
-  components/        通用按钮、弹层、图标、页头、导航、Toast 等
+  components/        通用按钮、弹层、图标、品牌、导航、Toast 等
   features/
     ideas/           念头、编辑器、AI 润色面板
     goals/           目标、任务、今天清单、编辑器

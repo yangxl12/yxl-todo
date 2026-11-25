@@ -51,7 +51,6 @@ export function ConfirmSheet({
       onClose={onClose}
       title={display.title}
       titleId="confirm-sheet-title"
-      eyebrow="请再确认一次"
       panelClassName="sheet-small"
       footer={
         <>

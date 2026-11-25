@@ -259,7 +259,6 @@ export function AiPolishSheet({
         onClose()
       }}
       title="让文字更靠近你"
-      eyebrow="AI 润色 · DEEPSEEK"
       subtitle={contextLabel}
       titleId="ai-polish-title"
       panelClassName="ai-sheet"

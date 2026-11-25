@@ -176,7 +176,6 @@ export function SettingsSheet({ open, onClose }: SettingsSheetProps) {
         open={open}
         onClose={onClose}
         title="设置"
-        eyebrow="YOUR SPACE"
         subtitle="数据留在本机，选择也由你决定。"
         titleId="settings-title"
         panelClassName="settings-sheet"
@@ -187,10 +186,7 @@ export function SettingsSheet({ open, onClose }: SettingsSheetProps) {
             <span className="settings-icon">
               <Icon name="spark" size={17} />
             </span>
-            <div>
-              <p className="settings-kicker">DEEPSEEK</p>
-              <h3 id="settings-ai-title">AI 润色</h3>
-            </div>
+            <h3 id="settings-ai-title">AI 润色</h3>
             <span className={hasKey ? 'settings-status is-connected' : 'settings-status'}>
               <span className="status-dot" />
               {hasKey ? '已接入' : '未接入'}
@@ -333,10 +329,7 @@ export function SettingsSheet({ open, onClose }: SettingsSheetProps) {
             <span className="settings-icon">
               <Icon name={data.prefs.theme === 'dark' ? 'moon' : 'sun'} size={17} />
             </span>
-            <div>
-              <p className="settings-kicker">APPEARANCE</p>
-              <h3 id="settings-theme-title">纸与墨</h3>
-            </div>
+            <h3 id="settings-theme-title">纸与墨</h3>
           </div>
           <div className="theme-options" role="group" aria-label="主题">
             {THEME_OPTIONS.map((option) => (
@@ -362,15 +355,10 @@ export function SettingsSheet({ open, onClose }: SettingsSheetProps) {
             <span className="settings-icon">
               <Icon name="lock" size={17} />
             </span>
-            <div>
-              <p className="settings-kicker">ON THIS DEVICE</p>
-              <h3 id="settings-data-title">本地数据</h3>
-            </div>
-            <span className="settings-status">
-              {data.ideas.length} 念 · {data.goals.length} 目标 · {stats.total} 步
-            </span>
+            <h3 id="settings-data-title">本地数据</h3>
           </div>
           <p className="settings-description">
+            {data.ideas.length} 则念头、{data.goals.length} 个目标和 {stats.total} 个步骤都在本机。
             没有账号，也没有云端副本。换设备或清理浏览器前，记得导出一份备份。
           </p>
 
@@ -439,10 +427,7 @@ export function SettingsSheet({ open, onClose }: SettingsSheetProps) {
               <span className="settings-icon">
                 <Icon name="install" size={17} />
               </span>
-              <div>
-                <p className="settings-kicker">APP</p>
-                <h3 id="settings-install-title">放在手边</h3>
-              </div>
+              <h3 id="settings-install-title">放在手边</h3>
               {install.installed ? (
                 <span className="settings-status is-connected">
                   <Icon name="check" size={12} /> 已安装
