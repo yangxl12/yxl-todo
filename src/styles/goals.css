@@ -181,15 +181,7 @@
   white-space: nowrap;
 }
 
-/* Goals toolbar and cards */
-.goals-toolbar {
-  margin-top: 0;
-}
-
-.goals-toolbar .btn {
-  min-height: 38px;
-}
-
+/* Goal cards */
 .goal-list {
   display: flex;
   flex-direction: column;
@@ -997,21 +989,6 @@
 
   .today-task-goal {
     max-width: 230px;
-  }
-
-  .goals-toolbar {
-    align-items: flex-start;
-  }
-
-  .goals-tools .sort-trigger span {
-    display: none;
-  }
-
-  .goals-tools .sort-trigger {
-    width: 34px;
-    justify-content: center;
-    padding: 0;
-    border-color: var(--line);
   }
 }
 

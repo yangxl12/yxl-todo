@@ -11,6 +11,7 @@ import {
 } from 'react'
 import type { AppAction, AppData, Preferences } from './types'
 import { createEmptyData, loadState, saveState } from './storage'
+import { trimTrash } from './trash'
 
 interface AppContextValue {
   data: AppData
@@ -166,6 +167,50 @@ function reducer(state: AppData, action: AppAction): AppData {
           ? state.favorites.filter((id) => id !== action.id)
           : [...state.favorites, action.id],
       }
+    case 'trash/add':
+      return { ...state, trash: trimTrash([action.entry, ...state.trash]) }
+    case 'trash/purge':
+      return { ...state, trash: state.trash.filter((entry) => entry.id !== action.entryId) }
+    case 'trash/clear':
+      return { ...state, trash: [] }
+    case 'trash/restore': {
+      const entry = state.trash.find((item) => item.id === action.entryId)
+      if (!entry) return state
+      const rest = state.trash.filter((item) => item.id !== action.entryId)
+
+      if (entry.kind === 'idea' && entry.idea) {
+        const idea = entry.idea
+        if (state.ideas.some((item) => item.id === idea.id)) return { ...state, trash: rest }
+        return { ...state, ideas: [idea, ...state.ideas], trash: rest }
+      }
+
+      if (entry.kind === 'goal' && entry.goal) {
+        const goal = entry.goal
+        if (state.goals.some((item) => item.id === goal.id)) return { ...state, trash: rest }
+        return { ...state, goals: [goal, ...state.goals], trash: rest }
+      }
+
+      if (entry.kind === 'task' && entry.task) {
+        const { goalId, task } = entry.task
+        const goal = state.goals.find((item) => item.id === goalId)
+        // The goal it belonged to is gone; leave the step in the trash rather
+        // than inventing a new home for it.
+        if (!goal || goal.tasks.some((item) => item.id === task.id)) {
+          return goal ? { ...state, trash: rest } : state
+        }
+        return {
+          ...state,
+          goals: state.goals.map((item) =>
+            item.id === goalId
+              ? { ...item, tasks: [...item.tasks, task], updatedAt: Date.now() }
+              : item,
+          ),
+          trash: rest,
+        }
+      }
+
+      return state
+    }
     default:
       return state
   }

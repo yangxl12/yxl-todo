@@ -120,6 +120,30 @@
   height: 32px;
 }
 
+/* Sort control: lives in the header row of both streams. */
+.sort-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 38px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  color: var(--ink-faint);
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  transition: color var(--dur-fast) ease, border-color var(--dur-fast) ease,
+    background-color var(--dur-fast) ease;
+}
+
+.sort-trigger:hover {
+  color: var(--ink);
+  border-color: var(--line);
+  background: var(--line-soft);
+}
+
 .text-link {
   display: inline-flex;
   align-items: center;

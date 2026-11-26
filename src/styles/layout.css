@@ -66,6 +66,41 @@
   gap: 2px;
 }
 
+/*
+ * Page controls (sort, search) live here instead of a row of their own, so
+ * each stream starts right below the header. The divider only shows when a
+ * page has actually portalled something in.
+ */
+.topbar-page-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.topbar-page-actions:not(:empty) {
+  margin-right: 3px;
+  padding-right: 5px;
+  border-right: 1px solid var(--line-soft);
+}
+
+.topbar .sort-trigger {
+  min-height: 40px;
+}
+
+/* Below this width the header is too tight for the sort label; the icon and
+   its accessible name carry the meaning on their own. */
+@media (max-width: 640px) {
+  .topbar .sort-trigger {
+    width: 34px;
+    justify-content: center;
+    padding: 0;
+  }
+
+  .topbar .sort-trigger span {
+    display: none;
+  }
+}
+
 .brand {
   display: inline-flex;
   align-items: center;
@@ -154,16 +189,6 @@
     opacity: 1;
     transform: translateY(0);
   }
-}
-
-/* Section support copy */
-.section-summary {
-  margin-top: 5px;
-  color: var(--ink-faint);
-  font-size: 10.5px;
-  line-height: 1.6;
-  letter-spacing: 0.04em;
-  font-variant-numeric: tabular-nums;
 }
 
 /* Side rail */
@@ -406,6 +431,107 @@
   transform: translateY(-1px);
 }
 
+/* Floating page controls: the seal that adds something, and the quiet way back up */
+.fab {
+  position: fixed;
+  right: calc(18px + env(safe-area-inset-right));
+  bottom: calc(var(--nav-height) + env(safe-area-inset-bottom) + 12px);
+  z-index: 36;
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border: 1px solid color-mix(in srgb, var(--vermilion) 74%, var(--ink));
+  border-radius: 4px;
+  background: var(--vermilion);
+  color: var(--vermilion-ink);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 2px 6px rgba(77, 29, 17, 0.16),
+    0 16px 34px rgba(77, 29, 17, 0.24);
+  transform: rotate(-2deg);
+  transition: transform var(--dur-base) var(--ease-spring),
+    box-shadow var(--dur-base) ease, background-color var(--dur-fast) ease;
+}
+
+.fab::after {
+  content: '';
+  position: absolute;
+  inset: 4px;
+  border: 1px solid rgba(253, 255, 251, 0.2);
+  border-radius: 2px;
+  pointer-events: none;
+}
+
+.fab-glyph {
+  font-family: var(--font-serif);
+  font-size: 21px;
+  line-height: 1;
+  letter-spacing: 0;
+  transform: translateY(-1px);
+}
+
+.fab-plus {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--paper-raised);
+  color: var(--vermilion);
+  box-shadow: 0 2px 6px rgba(44, 35, 22, 0.14);
+  transform: rotate(2deg);
+}
+
+.fab:hover {
+  background: var(--vermilion-bright);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 4px 10px rgba(77, 29, 17, 0.18),
+    0 20px 44px rgba(77, 29, 17, 0.28);
+  transform: rotate(0deg) translateY(-2px);
+}
+
+.fab:active {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 2px 5px rgba(77, 29, 17, 0.16),
+    0 10px 22px rgba(77, 29, 17, 0.2);
+  transform: rotate(0deg) translateY(0) scale(0.97);
+}
+
+.back-to-top {
+  position: fixed;
+  right: calc(16px + env(safe-area-inset-right));
+  bottom: calc(var(--nav-height) + env(safe-area-inset-bottom) + 14px);
+  z-index: 34;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 33px;
+  padding: 0 11px;
+  border: 1px solid var(--line);
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--paper-raised) 82%, transparent);
+  color: var(--ink-faint);
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+  opacity: 0;
+  transform: translateY(6px);
+  pointer-events: none;
+  transition: opacity var(--dur-base) ease, transform var(--dur-base) var(--ease-out),
+    color var(--dur-fast) ease, border-color var(--dur-fast) ease;
+}
+
+.back-to-top.is-visible {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+
+.back-to-top:hover {
+  border-color: var(--line-strong);
+  color: var(--ink-soft);
+}
+
 /* System notices */
 .save-warning {
   display: flex;
@@ -508,6 +634,16 @@
 
   .bottom-nav {
     display: none;
+  }
+
+  .fab {
+    right: 30px;
+    bottom: 30px;
+  }
+
+  .back-to-top {
+    right: 30px;
+    bottom: 34px;
   }
 
   .page-container {

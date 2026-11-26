@@ -2,25 +2,10 @@
   margin: 0 0 32px;
 }
 
-.daily-ember-heading {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 13px;
-  flex-wrap: wrap;
-}
-
-.daily-ember-heading h2 {
-  font-family: var(--font-serif);
-  font-size: 24px;
-  font-weight: 500;
-  letter-spacing: 0.08em;
-  line-height: 1.35;
-}
-
 .daily-ember-actions {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 8px;
 }
 
@@ -679,10 +664,6 @@
     margin-top: 29px;
   }
 
-  .daily-ember-heading h2 {
-    font-size: 27px;
-  }
-
   .fire-section-head h2 {
     font-size: 26px;
   }
@@ -702,15 +683,6 @@
 }
 
 @media (max-width: 440px) {
-  .daily-ember-heading {
-    align-items: flex-start;
-  }
-
-  .daily-ember-actions {
-    width: 100%;
-    justify-content: flex-start;
-  }
-
   .daily-ember-actions .save-button {
     min-height: 30px;
     padding: 3px 9px;

@@ -1,33 +1,26 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Button } from '../../components/Button'
 import { ChoiceSheet } from '../../components/ChoiceSheet'
-import { ConfirmSheet } from '../../components/ConfirmSheet'
 import { EmptyState } from '../../components/EmptyState'
+import { Fab } from '../../components/Fab'
 import { Icon } from '../../components/Icon'
 import { useToast } from '../../components/Toast'
 import { DOMAINS, GOAL_SORTS } from '../../lib/domains'
 import { useApp } from '../../lib/store'
+import { useTopbarSlot } from '../../lib/topbar'
+import { goalTrashEntry, taskTrashEntry, trashWouldOverflow } from '../../lib/trash'
 import { newId } from '../../lib/storage'
 import type { DomainKey, Goal, GoalSort, Task } from '../../lib/types'
 import { getDueTone } from '../../lib/date'
 import { GoalCard } from './GoalCard'
 import { GoalEditorSheet } from './GoalEditorSheet'
 import { TaskEditorSheet } from './TaskEditorSheet'
-import {
-  getTodayEntries,
-  goalStats,
-  goalTaskCounts,
-  latestCompletion,
-  type GoalStats,
-} from './taskUtils'
+import { getTodayEntries, goalStats, latestCompletion, type GoalStats } from './taskUtils'
 import { cx } from '../../lib/utils'
 
 type GoalEditorState = { mode: 'create' } | { mode: 'edit'; goalId: string } | null
 type TaskEditorState = { goalId: string; taskId: string } | null
-type DeleteTarget =
-  | { kind: 'goal'; goal: Goal }
-  | { kind: 'task'; goalId: string; task: Task }
-  | null
 
 // Same rhythm as the thoughts list: render a first screenful, let the rest
 // arrive on request instead of mounting every goal card up front.
@@ -63,6 +56,7 @@ function sortActiveGoals(
 export function GoalsView() {
   const { data, dispatch } = useApp()
   const { showToast } = useToast()
+  const topbarSlot = useTopbarSlot()
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
   const [completedOpen, setCompletedOpen] = useState(false)
   const [sortOpen, setSortOpen] = useState(false)
@@ -73,7 +67,6 @@ export function GoalsView() {
   const [taskEditor, setTaskEditor] = useState<TaskEditorState>(null)
   const [taskEditorOpen, setTaskEditorOpen] = useState(false)
   const [taskEditorSession, setTaskEditorSession] = useState(0)
-  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget>(null)
   const [newGoalId, setNewGoalId] = useState<string | null>(null)
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
   const [todayOpen, setTodayOpen] = useState(false)
@@ -133,7 +126,6 @@ export function GoalsView() {
     () => (todayOpen ? todayEntries : todayEntries.slice(0, TODAY_LIMIT)),
     [todayEntries, todayOpen],
   )
-  const counts = useMemo(() => goalTaskCounts(data.goals), [data.goals])
   const availableDomains = useMemo(() => {
     const used = new Set(data.goals.map((goal) => goal.domain))
     return DOMAINS.filter((domain) => used.has(domain.key))
@@ -285,34 +277,36 @@ export function GoalsView() {
     setGoalEditorOpen(false)
   }
 
-  const requestDeleteGoal = (goal: Goal) => {
+  const deleteGoal = (goal: Goal) => {
+    const entry = goalTrashEntry(goal)
+    const full = trashWouldOverflow(data.trash, entry)
     setGoalEditorOpen(false)
-    setDeleteTarget({ kind: 'goal', goal })
-  }
-
-  const requestDeleteTask = (goal: Goal, task: Task) => {
-    setTaskEditorOpen(false)
-    setDeleteTarget({ kind: 'task', goalId: goal.id, task })
-  }
-
-  const confirmDelete = () => {
-    if (!deleteTarget) return
-    if (deleteTarget.kind === 'goal') {
-      const deleted = deleteTarget.goal
-      dispatch({ type: 'goal/delete', id: deleted.id })
-      showToast(`「${deleted.title}」已删除`, {
-        actionLabel: '撤回',
-        onAction: () => dispatch({ type: 'goal/restore', goal: deleted }),
-      })
-    } else {
-      const { goalId, task } = deleteTarget
-      dispatch({ type: 'task/delete', goalId, taskId: task.id })
-      showToast(`「${task.title}」已删除`, {
-        actionLabel: '撤回',
-        onAction: () => dispatch({ type: 'task/restore', goalId, task }),
-      })
+    dispatch({ type: 'goal/delete', id: goal.id })
+    dispatch({ type: 'trash/add', entry })
+    if (full) {
+      showToast('最近删除满了，最旧的已被清掉，去设置里清一清', { duration: 6000 })
+      return
     }
-    setDeleteTarget(null)
+    showToast(`「${goal.title}」已放进最近删除`, {
+      actionLabel: '撤回',
+      onAction: () => dispatch({ type: 'trash/restore', entryId: entry.id }),
+    })
+  }
+
+  const deleteTask = (goal: Goal, task: Task) => {
+    const entry = taskTrashEntry(goal, task)
+    const full = trashWouldOverflow(data.trash, entry)
+    setTaskEditorOpen(false)
+    dispatch({ type: 'task/delete', goalId: goal.id, taskId: task.id })
+    dispatch({ type: 'trash/add', entry })
+    if (full) {
+      showToast('最近删除满了，最旧的已被清掉，去设置里清一清', { duration: 6000 })
+      return
+    }
+    showToast(`「${task.title}」已放进最近删除`, {
+      actionLabel: '撤回',
+      onAction: () => dispatch({ type: 'trash/restore', entryId: entry.id }),
+    })
   }
 
   const renderGoal = (goal: Goal) => (
@@ -397,32 +391,21 @@ export function GoalsView() {
         </section>
       ) : null}
 
-      <div className="goals-toolbar">
-        <div className="goals-toolbar-title">
-          <h2>目标清单</h2>
-          {activeGoals.length ? (
-            <p className="section-summary">
-              {activeGoals.length} 个在走 · {counts.done} / {counts.total} 步完成
-            </p>
-          ) : allCompleted ? (
-            <p className="section-summary">{completedGoals.length} 个目标已达成</p>
-          ) : null}
-        </div>
-        <div className="goals-tools">
-          <button
-            type="button"
-            className="sort-trigger"
-            onClick={() => setSortOpen(true)}
-            aria-label={`排序方式：${currentSort.label}`}
-          >
-            <Icon name="sort" size={15} />
-            <span>{currentSort.label}</span>
-          </button>
-          <Button variant="primary" icon="plus" onClick={openNewGoal}>
-            新目标
-          </Button>
-        </div>
-      </div>
+      {topbarSlot
+        ? createPortal(
+            <button
+              type="button"
+              className="sort-trigger"
+              onClick={() => setSortOpen(true)}
+              aria-label={`排序方式：${currentSort.label}`}
+              title={`排序方式：${currentSort.label}`}
+            >
+              <Icon name="sort" size={15} />
+              <span>{currentSort.label}</span>
+            </button>,
+            topbarSlot,
+          )
+        : null}
 
       {availableDomains.length > 1 ? (
         <div className="filter-strip" aria-label="按类别筛选目标">
@@ -557,7 +540,7 @@ export function GoalsView() {
         initialDomain={domainFilter ?? 'life'}
         onClose={() => setGoalEditorOpen(false)}
         onSave={saveGoal}
-        onRequestDelete={requestDeleteGoal}
+        onRequestDelete={deleteGoal}
       />
 
       <TaskEditorSheet
@@ -576,7 +559,7 @@ export function GoalsView() {
           })
           setTaskEditorOpen(false)
         }}
-        onRequestDelete={requestDeleteTask}
+        onRequestDelete={deleteTask}
       />
 
       <ChoiceSheet<GoalSort>
@@ -590,28 +573,7 @@ export function GoalsView() {
         onChange={(value) => dispatch({ type: 'prefs/update', patch: { goalSort: value } })}
       />
 
-      <ConfirmSheet
-        open={Boolean(deleteTarget)}
-        onClose={() => setDeleteTarget(null)}
-        onConfirm={confirmDelete}
-        title={deleteTarget?.kind === 'goal' ? '要把这个目标删掉吗？' : '要把这一步删掉吗？'}
-        confirmLabel={deleteTarget?.kind === 'goal' ? '删除目标' : '删除这一步'}
-        description={
-          deleteTarget?.kind === 'goal' ? (
-            <div className="delete-preview">
-              <p>{deleteTarget.goal.title}</p>
-              <small>
-                它下面的 {deleteTarget.goal.tasks.length} 个步骤也会一起删除。五秒内仍可撤回。
-              </small>
-            </div>
-          ) : (
-            <div className="delete-preview">
-              <p>{deleteTarget?.task.title}</p>
-              <small>删除后五秒内仍可撤回。</small>
-            </div>
-          )
-        }
-      />
+      <Fab glyph="立" label="新增目标" onClick={openNewGoal} />
     </div>
   )
 }

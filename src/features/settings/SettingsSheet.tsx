@@ -14,8 +14,10 @@ import {
   type ImportedBackup,
 } from '../../lib/storage'
 import { useInstallPrompt } from '../../lib/useInstallPrompt'
+import { formatBytes, trashBytes } from '../../lib/trash'
 import { cx, maskKey } from '../../lib/utils'
 import { goalTaskCounts } from '../goals/taskUtils'
+import { TrashSheet } from './TrashSheet'
 
 interface SettingsSheetProps {
   open: boolean
@@ -51,10 +53,12 @@ export function SettingsSheet({ open, onClose }: SettingsSheetProps) {
   const [dataNotice, setDataNotice] = useState<Notice>(null)
   const [pendingImport, setPendingImport] = useState<ImportedBackup | null>(null)
   const [clearOpen, setClearOpen] = useState(false)
+  const [trashOpen, setTrashOpen] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const hasKey = Boolean(data.prefs.apiKey)
   const editingKey = keyEditing || !hasKey
   const stats = useMemo(() => goalTaskCounts(data.goals), [data.goals])
+  const trashed = useMemo(() => trashBytes(data.trash), [data.trash])
 
   useEffect(() => {
     if (!open) return
@@ -65,6 +69,7 @@ export function SettingsSheet({ open, onClose }: SettingsSheetProps) {
     setDataNotice(null)
     setPendingImport(null)
     setClearOpen(false)
+    setTrashOpen(false)
   }, [open])
 
   const saveKey = () => {
@@ -421,6 +426,26 @@ export function SettingsSheet({ open, onClose }: SettingsSheetProps) {
           </button>
         </section>
 
+        <section className="settings-section" aria-labelledby="settings-trash-title">
+          <div className="settings-section-head">
+            <span className="settings-icon">
+              <Icon name="trash" size={17} />
+            </span>
+            <h3 id="settings-trash-title">最近删除</h3>
+            <span className="settings-status">
+              {data.trash.length ? `${data.trash.length} 条 · ${formatBytes(trashed)}` : '空'}
+            </span>
+          </div>
+          <p className="settings-description">
+            删掉的念头、目标和步骤不会立刻消失，先在这里躺一阵。最多留 5 MB，满了就从最旧的开始清。
+          </p>
+          <div className="data-actions">
+            <Button variant="secondary" icon="trash" onClick={() => setTrashOpen(true)}>
+              查看最近删除
+            </Button>
+          </div>
+        </section>
+
         {(install.canInstall || install.installed || install.iosHint) && (
           <section className="settings-section" aria-labelledby="settings-install-title">
             <div className="settings-section-head">
@@ -484,6 +509,8 @@ export function SettingsSheet({ open, onClose }: SettingsSheetProps) {
           </div>
         }
       />
+
+      <TrashSheet open={trashOpen} onClose={() => setTrashOpen(false)} />
     </>
   )
 }

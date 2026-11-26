@@ -9,25 +9,20 @@ interface IdeaCardProps {
   index: number
   isNew: boolean
   onOpen: (idea: Idea) => void
+  onDelete: (idea: Idea) => void
 }
 
-export const IdeaCard = memo(function IdeaCard({ idea, index, isNew, onOpen }: IdeaCardProps) {
+export const IdeaCard = memo(function IdeaCard({
+  idea,
+  index,
+  isNew,
+  onOpen,
+  onDelete,
+}: IdeaCardProps) {
   const edited = idea.updatedAt - idea.createdAt > 60_000
 
   return (
-    <article
-      className={cx('idea-card', idea.pinned && 'is-pinned', isNew && 'is-new')}
-      role="button"
-      tabIndex={0}
-      aria-label={`打开念头：${idea.text.slice(0, 40)}`}
-      onClick={() => onOpen(idea)}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault()
-          onOpen(idea)
-        }
-      }}
-    >
+    <article className={cx('idea-card', idea.pinned && 'is-pinned', isNew && 'is-new')}>
       <div className="idea-card-top">
         <span className="idea-card-index">{String(index + 1).padStart(2, '0')}</span>
         <span className="idea-card-meta">
@@ -55,10 +50,26 @@ export const IdeaCard = memo(function IdeaCard({ idea, index, isNew, onOpen }: I
           ))}
           {!idea.tags.length ? <span className="idea-card-untagged">未归类</span> : null}
         </div>
-        <span className="idea-card-open">
-          打开
-          <Icon name="arrowUpRight" size={14} />
-        </span>
+        <div className="idea-card-actions">
+          <button
+            type="button"
+            className="idea-card-trash"
+            aria-label={`删除念头：${idea.text.slice(0, 30)}`}
+            title="删除这则念头"
+            onClick={() => onDelete(idea)}
+          >
+            <Icon name="trash" size={14} />
+          </button>
+          <button
+            type="button"
+            className="idea-card-open"
+            aria-label={`打开念头：${idea.text.slice(0, 40)}`}
+            onClick={() => onOpen(idea)}
+          >
+            打开
+            <Icon name="arrowUpRight" size={14} />
+          </button>
+        </div>
       </div>
     </article>
   )

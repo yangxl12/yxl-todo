@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Button, IconButton } from '../../components/Button'
-import { ConfirmSheet } from '../../components/ConfirmSheet'
 import { ChoiceSheet } from '../../components/ChoiceSheet'
 import { EmptyState } from '../../components/EmptyState'
+import { Fab } from '../../components/Fab'
 import { Icon } from '../../components/Icon'
 import { useToast } from '../../components/Toast'
 import { IDEA_SORTS } from '../../lib/domains'
 import { useApp } from '../../lib/store'
+import { useTopbarSlot } from '../../lib/topbar'
+import { ideaTrashEntry, trashWouldOverflow } from '../../lib/trash'
 import type { Idea, IdeaSort } from '../../lib/types'
 import { IdeaCard } from './IdeaCard'
 import { IdeaSheet } from './IdeaSheet'
@@ -36,6 +38,7 @@ function ideaSearchBlob(idea: Idea): string {
 export function IdeasView() {
   const { data, dispatch } = useApp()
   const { showToast } = useToast()
+  const topbarSlot = useTopbarSlot()
   const [query, setQuery] = useState('')
   const [searchOpen, setSearchOpen] = useState(false)
   const [activeTag, setActiveTag] = useState<string | null>(null)
@@ -43,8 +46,6 @@ export function IdeasView() {
   const [sheet, setSheet] = useState<IdeaSheetState>(null)
   const [sheetOpen, setSheetOpen] = useState(false)
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
-  const [pendingDelete, setPendingDelete] = useState<Idea | null>(null)
-  const [confirmOpen, setConfirmOpen] = useState(false)
   const [lastAddedId, setLastAddedId] = useState<string | null>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
   // A blur can fold an empty search away just before the toolbar button's
@@ -116,23 +117,27 @@ export function IdeasView() {
     setSheetOpen(true)
   }, [])
 
-  const requestDelete = (idea: Idea) => {
-    setSheet({ mode: 'edit', ideaId: idea.id, idea })
-    setSheetOpen(false)
-    setPendingDelete(idea)
-    setConfirmOpen(true)
-  }
-
-  const deleteIdea = () => {
-    if (!pendingDelete) return
-    const deleted = pendingDelete
-    dispatch({ type: 'idea/delete', id: deleted.id })
-    setPendingDelete(null)
-    showToast('这则念头已离开', {
-      actionLabel: '撤回',
-      onAction: () => dispatch({ type: 'idea/restore', idea: deleted }),
-    })
-  }
+  // Deleting asks nothing: the thought is kept in 最近删除, and the toast is
+  // the fast way back. That is one step fewer than a confirmation nobody reads.
+  // Kept referentially stable so memoized cards skip re-rendering with each key.
+  const deleteIdea = useCallback(
+    (idea: Idea) => {
+      const entry = ideaTrashEntry(idea)
+      const full = trashWouldOverflow(data.trash, entry)
+      dispatch({ type: 'idea/delete', id: idea.id })
+      dispatch({ type: 'trash/add', entry })
+      setSheetOpen(false)
+      if (full) {
+        showToast('最近删除满了，最旧的已被清掉，去设置里清一清', { duration: 6000 })
+        return
+      }
+      showToast('已放进最近删除', {
+        actionLabel: '撤回',
+        onAction: () => dispatch({ type: 'trash/restore', entryId: entry.id }),
+      })
+    },
+    [data.trash, dispatch, showToast],
+  )
 
   const clearFilters = () => {
     setQuery('')
@@ -163,41 +168,42 @@ export function IdeasView() {
     <div className="ideas-view">
       <h1 className="sr-only">念头</h1>
 
-      <section className="ideas-stream" aria-labelledby="ideas-stream-title">
-        <div className="ideas-toolbar">
-          <div className="ideas-toolbar-title">
-            <h2 id="ideas-stream-title">留下的念头</h2>
-          </div>
-          <div className="ideas-tools">
-            <button
-              type="button"
-              className="sort-trigger"
-              onClick={() => setSortOpen(true)}
-              aria-label={`排序方式：${currentSort.label}`}
-            >
-              <Icon name="sort" size={15} />
-              <span>{currentSort.label}</span>
-            </button>
-            <IconButton
-              label={searchOpen ? '收起搜索' : '搜索念头'}
-              icon="search"
-              onPointerDown={(event) => {
-                event.preventDefault()
-                searchPressedOpenRef.current = searchOpenRef.current
-              }}
-              onClick={() => {
-                const wasOpen = searchPressedOpenRef.current
-                searchPressedOpenRef.current = false
-                // The blur that this same press caused already dismissed it.
-                if (wasOpen && !searchOpen) return
-                if (searchOpen) closeSearch()
-                else setSearchOpen(true)
-              }}
-              className={searchOpen ? 'is-active' : undefined}
-            />
-          </div>
-        </div>
+      {topbarSlot
+        ? createPortal(
+            <>
+              <button
+                type="button"
+                className="sort-trigger"
+                onClick={() => setSortOpen(true)}
+                aria-label={`排序方式：${currentSort.label}`}
+                title={`排序方式：${currentSort.label}`}
+              >
+                <Icon name="sort" size={15} />
+                <span>{currentSort.label}</span>
+              </button>
+              <IconButton
+                label={searchOpen ? '收起搜索' : '搜索念头'}
+                icon="search"
+                onPointerDown={(event) => {
+                  event.preventDefault()
+                  searchPressedOpenRef.current = searchOpenRef.current
+                }}
+                onClick={() => {
+                  const wasOpen = searchPressedOpenRef.current
+                  searchPressedOpenRef.current = false
+                  // The blur that this same press caused already dismissed it.
+                  if (wasOpen && !searchOpen) return
+                  if (searchOpen) closeSearch()
+                  else setSearchOpen(true)
+                }}
+                className={searchOpen ? 'is-active' : undefined}
+              />
+            </>,
+            topbarSlot,
+          )
+        : null}
 
+      <section className="ideas-stream" aria-label="念头列表">
         {searchOpen ? (
           <div className="search-bar">
             <Icon name="search" size={17} />
@@ -210,8 +216,8 @@ export function IdeasView() {
                 if (event.key === 'Escape') closeSearch()
               }}
               onBlur={() => {
-                // An empty search that loses focus folds back into the toolbar;
-                // a search with words stays, because its results are still in use.
+                // An empty search that loses focus folds away; a search with
+                // words stays, because its results are still in use.
                 if (!query.trim()) closeSearch()
               }}
               placeholder="搜念头或标签…"
@@ -287,6 +293,7 @@ export function IdeasView() {
                   index={index}
                   isNew={idea.id === lastAddedId}
                   onOpen={openIdea}
+                  onDelete={deleteIdea}
                 />
               ))}
             </div>
@@ -310,23 +317,7 @@ export function IdeasView() {
         )}
       </section>
 
-      {createPortal(
-        <button
-          type="button"
-          className="idea-fab"
-          onClick={openComposer}
-          aria-label="新增念头"
-          title="新增念头"
-        >
-          <span className="idea-fab-glyph" aria-hidden="true">
-            记
-          </span>
-          <span className="idea-fab-plus" aria-hidden="true">
-            <Icon name="plus" size={12} />
-          </span>
-        </button>,
-        document.body,
-      )}
+      <Fab glyph="记" label="新增念头" onClick={openComposer} />
 
       <IdeaSheet
         key={sheet?.mode === 'edit' ? `idea-${sheet.ideaId}` : 'idea-create'}
@@ -337,7 +328,7 @@ export function IdeasView() {
         onClose={() => setSheetOpen(false)}
         onCreated={handleSaved}
         onReopen={openComposer}
-        onRequestDelete={requestDelete}
+        onRequestDelete={deleteIdea}
       />
 
       <ChoiceSheet<IdeaSort>
@@ -349,24 +340,6 @@ export function IdeasView() {
         options={IDEA_SORTS}
         value={data.prefs.ideaSort}
         onChange={(value) => dispatch({ type: 'prefs/update', patch: { ideaSort: value } })}
-      />
-
-      <ConfirmSheet
-        open={confirmOpen && Boolean(pendingDelete)}
-        onClose={() => {
-          setConfirmOpen(false)
-          setPendingDelete(null)
-        }}
-        onConfirm={deleteIdea}
-        title="要把这则念头删掉吗？"
-        confirmLabel="删除这则念头"
-        description={
-          <div className="delete-preview">
-            <p>{pendingDelete?.text.slice(0, 150)}</p>
-            {(pendingDelete?.text.length ?? 0) > 150 ? <span>…</span> : null}
-            <small>删除后 5 秒内还能撤回。再久一点，它就真的离开了。</small>
-          </div>
-        }
       />
     </div>
   )

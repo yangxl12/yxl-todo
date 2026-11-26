@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useRegisterSW } from 'virtual:pwa-register/react'
 import { Brand } from './components/Brand'
 import { IconButton } from './components/Button'
@@ -10,6 +10,7 @@ import { useHashRoute } from './lib/useHashRoute'
 import { useTheme } from './lib/useTheme'
 import { formatFullDate } from './lib/date'
 import { InstallProvider } from './lib/useInstallPrompt'
+import { TopbarSlotProvider } from './lib/topbar'
 import { cx } from './lib/utils'
 import { IdeasView } from './features/ideas/IdeasView'
 import { GoalsView } from './features/goals/GoalsView'
@@ -31,6 +32,13 @@ function AppContent() {
   const { tab, navigate } = useHashRoute()
   const { resolvedDark } = useTheme(data.prefs.theme)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  // Page controls are rendered by each view but live in the header row, so a
+  // stable callback ref hands them the slot instead of making them duplicate
+  // the header markup.
+  const [actionsHost, setActionsHost] = useState<HTMLDivElement | null>(null)
+  const bindActions = useCallback((node: HTMLDivElement | null) => {
+    setActionsHost(node)
+  }, [])
   const {
     needRefresh: [needRefresh],
     updateServiceWorker,
@@ -45,7 +53,7 @@ function AppContent() {
   const nextTheme = resolvedDark ? 'light' : 'dark'
 
   return (
-    <>
+    <TopbarSlotProvider host={actionsHost}>
       <a className="skip-link" href="#main-content">
         跳到主要内容
       </a>
@@ -67,6 +75,7 @@ function AppContent() {
               </div>
             </div>
             <div className="topbar-actions">
+              <div className="topbar-page-actions" ref={bindActions} />
               <IconButton
                 label={resolvedDark ? '切换到纸色主题' : '切换到墨色主题'}
                 icon={resolvedDark ? 'sun' : 'moon'}
@@ -113,7 +122,7 @@ function AppContent() {
           </button>
         </div>
       ) : null}
-    </>
+    </TopbarSlotProvider>
   )
 }
 

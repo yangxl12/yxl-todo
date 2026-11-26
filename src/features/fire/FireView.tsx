@@ -1,4 +1,5 @@
 import { memo, useMemo, useState } from 'react'
+import { BackToTop } from '../../components/BackToTop'
 import { Button } from '../../components/Button'
 import { EmptyState } from '../../components/EmptyState'
 import { Icon } from '../../components/Icon'
@@ -86,16 +87,13 @@ function ScienceDetails({ item }: { item: FireMethod }) {
 function DailyEmber({ item, onSwap }: { item: FireItem; onSwap: () => void }) {
   const isMethod = item.kind === 'method'
   return (
-    <section className="daily-ember-wrap" aria-labelledby="daily-ember-title">
-      <div className="daily-ember-heading">
-        <h2 id="daily-ember-title">今日一焰</h2>
-        <div className="daily-ember-actions">
-          <FavoriteButton itemId={item.id} label="收下这一焰" />
-          <button type="button" className="swap-button" onClick={onSwap}>
-            <Icon name="refresh" size={15} />
-            换一焰
-          </button>
-        </div>
+    <section className="daily-ember-wrap" aria-label="今日一焰">
+      <div className="daily-ember-actions">
+        <FavoriteButton itemId={item.id} label="收下这一焰" />
+        <button type="button" className="swap-button" onClick={onSwap}>
+          <Icon name="refresh" size={15} />
+          换一焰
+        </button>
       </div>
 
       <article className={cx('daily-ember', `daily-ember-${item.kind}`)} key={item.id}>
@@ -306,6 +304,8 @@ export function FireView() {
           文献出处附在卡片内；外文引文为中文译文，已尽量贴近原意。
         </p>
       </footer>
+
+      <BackToTop />
     </div>
   )
 }

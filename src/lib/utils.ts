@@ -2,6 +2,10 @@ export function cx(...values: Array<string | false | null | undefined>): string 
   return values.filter(Boolean).join(' ')
 }
 
+export function newId(): string {
+  return crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
+
 export function maskKey(key: string): string {
   if (!key) return ''
   if (key.length <= 8) return '••••••••'

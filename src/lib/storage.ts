@@ -11,8 +11,11 @@ import type {
   Priority,
   Task,
   ThemeMode,
+  TrashEntry,
 } from './types'
 import { toDateKey } from './date'
+import { textBytes, trimTrash } from './trash'
+import { newId } from './utils'
 
 const DB_NAME = 'shiyan-local'
 const DB_VERSION = 1
@@ -87,6 +90,7 @@ export function createEmptyData(): AppData {
     ideas: [],
     goals: [],
     favorites: [],
+    trash: [],
     prefs: defaultPreferences(),
   }
 }
@@ -189,7 +193,7 @@ function normalizeGoal(value: unknown, now: number, usedIdeas: Set<string>): Goa
   if (!title) return null
   let id = stringValue(value.id).slice(0, 80)
   if (!id || usedIdeas.has(id)) {
-    id = crypto.randomUUID ? crypto.randomUUID() : `${now}-${Math.random().toString(36).slice(2)}`
+    id = newId()
   }
   usedIdeas.add(id)
   const createdAt = numberValue(value.createdAt, now)
@@ -213,6 +217,71 @@ function normalizeGoal(value: unknown, now: number, usedIdeas: Set<string>): Goa
   }
 }
 
+function normalizeIdea(value: unknown, now: number, usedIds: Set<string>): Idea | null {
+  if (!isRecord(value)) return null
+  const text = stringValue(value.text).replace(/\r\n/g, '\n').slice(0, 50000)
+  if (!text.trim()) return null
+  let id = stringValue(value.id).slice(0, 80)
+  if (!id || usedIds.has(id)) {
+    id = newId()
+  }
+  usedIds.add(id)
+  const createdAt = numberValue(value.createdAt, now)
+  const pinned = Boolean(value.pinned)
+  return {
+    id,
+    text,
+    tags: normalizeTags(value.tags),
+    pinned,
+    pinnedAt: pinned ? nullableTimestamp(value.pinnedAt) ?? createdAt : null,
+    createdAt,
+    updatedAt: numberValue(value.updatedAt, createdAt),
+  }
+}
+
+function normalizeTrash(value: unknown, now: number): TrashEntry[] {
+  if (!Array.isArray(value)) return []
+  const usedIdeaIds = new Set<string>()
+  const usedGoalIds = new Set<string>()
+  const entries: TrashEntry[] = []
+
+  for (const raw of value.slice(0, 400)) {
+    if (!isRecord(raw)) continue
+    const deletedAt = numberValue(raw.deletedAt, now)
+    const id = stringValue(raw.id).slice(0, 80) || newId()
+    const entry: TrashEntry = { id, kind: 'idea', deletedAt, size: 0 }
+
+    if (raw.kind === 'idea') {
+      const idea = normalizeIdea(raw.idea, now, usedIdeaIds)
+      if (!idea) continue
+      entry.kind = 'idea'
+      entry.idea = idea
+    } else if (raw.kind === 'goal') {
+      const goal = normalizeGoal(raw.goal, now, usedGoalIds)
+      if (!goal) continue
+      entry.kind = 'goal'
+      entry.goal = goal
+    } else if (raw.kind === 'task' && isRecord(raw.task)) {
+      const goalId = stringValue(raw.task.goalId).slice(0, 80)
+      const task = normalizeTask(raw.task.task, now, new Set())
+      if (!goalId || !task) continue
+      entry.kind = 'task'
+      entry.task = {
+        goalId,
+        goalTitle: stringValue(raw.task.goalTitle).slice(0, 120),
+        task,
+      }
+    } else {
+      continue
+    }
+
+    entry.size = textBytes(JSON.stringify(entry))
+    entries.push(entry)
+  }
+
+  return trimTrash(entries)
+}
+
 export function normalizeAppData(
   value: unknown,
   options?: { apiKey?: string },
@@ -224,25 +293,8 @@ export function normalizeAppData(
   const usedIdeaIds = new Set<string>()
   const ideas: Idea[] = []
   for (const entry of value.ideas.slice(0, 5000)) {
-    if (!isRecord(entry)) continue
-    const text = stringValue(entry.text).replace(/\r\n/g, '\n').slice(0, 50000)
-    if (!text.trim()) continue
-    let id = stringValue(entry.id).slice(0, 80)
-    if (!id || usedIdeaIds.has(id)) {
-      id = crypto.randomUUID ? crypto.randomUUID() : `${now}-${Math.random().toString(36).slice(2)}`
-    }
-    usedIdeaIds.add(id)
-    const createdAt = numberValue(entry.createdAt, now)
-    const pinned = Boolean(entry.pinned)
-    ideas.push({
-      id,
-      text,
-      tags: normalizeTags(entry.tags),
-      pinned,
-      pinnedAt: pinned ? nullableTimestamp(entry.pinnedAt) ?? createdAt : null,
-      createdAt,
-      updatedAt: numberValue(entry.updatedAt, createdAt),
-    })
+    const idea = normalizeIdea(entry, now, usedIdeaIds)
+    if (idea) ideas.push(idea)
   }
 
   const usedGoalIds = new Set<string>()
@@ -264,6 +316,7 @@ export function normalizeAppData(
     ideas,
     goals,
     favorites,
+    trash: normalizeTrash(value.trash, now),
     prefs: normalizePrefs(value.prefs, options?.apiKey),
   }
 
@@ -409,6 +462,5 @@ export function downloadBackup(data: AppData): void {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
-export function newId(): string {
-  return crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`
-}
+export { newId } from './utils'
+

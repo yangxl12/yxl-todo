@@ -33,6 +33,11 @@
   transform: translateY(0);
 }
 
+/*
+ * The scrim only changes colour. A backdrop-filter here forced the whole page
+ * (including the grain blend and every translucent card) to be re-composited
+ * the moment the sheet opened, which read as a flash behind the dialog.
+ */
 .modal::backdrop {
   background-color: transparent;
   transition: background-color 200ms var(--ease-out);
@@ -40,8 +45,6 @@
 
 .modal.is-open::backdrop {
   background-color: var(--scrim);
-  backdrop-filter: blur(3px);
-  -webkit-backdrop-filter: blur(3px);
 }
 
 .modal:focus {
@@ -224,6 +227,169 @@
   color: var(--ink-faint);
   font-size: 11.5px;
   line-height: 1.7;
+}
+
+/* Trash */
+.trash-sheet {
+  max-width: 620px;
+}
+
+.trash-body {
+  padding-top: 2px;
+}
+
+.trash-meter {
+  height: 2px;
+  margin: 2px 0 13px;
+  border-radius: 99px;
+  background: var(--line);
+  overflow: hidden;
+}
+
+.trash-meter > span {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--vermilion);
+  transform-origin: left center;
+  transition: transform 320ms var(--ease-out);
+}
+
+.trash-hint {
+  margin-bottom: 10px;
+  color: var(--ink-ghost);
+  font-size: 10.5px;
+  line-height: 1.75;
+}
+
+.trash-notice {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+  padding: 7px 10px;
+  border: 1px solid var(--line-soft);
+  background: var(--moss-soft);
+  color: var(--ink-soft);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.trash-notice svg {
+  flex: 0 0 auto;
+  color: var(--moss);
+}
+
+.trash-notice.notice-error {
+  background: var(--vermilion-soft);
+  border-color: var(--vermilion-line);
+}
+
+.trash-notice.notice-error svg {
+  color: var(--vermilion);
+}
+
+.trash-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.trash-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 0;
+  border-top: 1px solid var(--line-soft);
+}
+
+.trash-item:first-child {
+  border-top: 0;
+}
+
+.trash-item-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.trash-kind {
+  display: inline-flex;
+  align-items: center;
+  min-height: 19px;
+  padding: 0 7px;
+  border: 1px solid var(--line);
+  border-radius: 99px;
+  color: var(--ink-faint);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  line-height: 1.4;
+}
+
+.trash-kind-idea {
+  color: var(--vermilion);
+  border-color: var(--vermilion-line);
+  background: var(--vermilion-soft);
+}
+
+.trash-kind-goal {
+  color: var(--brass);
+  border-color: color-mix(in srgb, var(--brass) 26%, transparent);
+  background: var(--brass-soft);
+}
+
+.trash-kind-task {
+  color: var(--moss);
+  border-color: color-mix(in srgb, var(--moss) 26%, transparent);
+  background: var(--moss-soft);
+}
+
+.trash-text {
+  display: -webkit-box;
+  margin-top: 6px;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: var(--font-serif);
+  font-size: 14.5px;
+  line-height: 1.65;
+  letter-spacing: 0.02em;
+  color: var(--ink);
+}
+
+.trash-meta {
+  margin-top: 4px;
+  color: var(--ink-ghost);
+  font-size: 9.5px;
+  letter-spacing: 0.03em;
+}
+
+.trash-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 auto;
+}
+
+.trash-item-actions .mini-action {
+  min-height: 30px;
+  padding: 0 10px;
+  font-size: 10.5px;
+}
+
+.trash-item-actions .mini-action:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.trash-usage {
+  color: var(--ink-faint);
+  font-family: var(--font-display);
+  font-size: 10px;
+  letter-spacing: 0.03em;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Settings */
