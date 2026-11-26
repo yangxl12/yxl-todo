@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { Button } from '../../components/Button'
 import { Icon } from '../../components/Icon'
 import { Sheet } from '../../components/Modal'
@@ -24,19 +24,12 @@ export function TaskEditorSheet({
   onSave,
   onRequestDelete,
 }: TaskEditorSheetProps) {
-  const [title, setTitle] = useState('')
-  const [dueDate, setDueDate] = useState<string | null>(null)
-  const [priority, setPriority] = useState<Priority>('normal')
+  // Remounted on every open, so the task being edited is already in state.
+  const [title, setTitle] = useState(task?.title ?? '')
+  const [dueDate, setDueDate] = useState<string | null>(task?.dueDate ?? null)
+  const [priority, setPriority] = useState<Priority>(task?.priority ?? 'normal')
   const [error, setError] = useState('')
   const titleRef = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    if (!open || !task) return
-    setTitle(task.title)
-    setDueDate(task.dueDate)
-    setPriority(task.priority)
-    setError('')
-  }, [open, task])
 
   if (!goal || !task) return null
 
@@ -57,6 +50,7 @@ export function TaskEditorSheet({
       subtitle={`${DOMAIN_MAP[goal.domain].label} · 在目标「${goal.title}」之下`}
       titleId="task-editor-title"
       panelClassName="sheet-small task-editor-sheet"
+      initialFocusRef={titleRef}
       footer={
         <div className="sheet-foot-split">
           <Button variant="ghost" icon="trash" onClick={() => onRequestDelete(goal, task)}>

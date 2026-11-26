@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import { cx } from '../lib/utils'
 import { IconButton } from './Button'
@@ -19,6 +19,58 @@ function unlockPageScroll() {
   }
 }
 
+/**
+ * Keeps a fixed layer above the software keyboard.
+ *
+ * The dialog lives in the layout viewport, which on iOS does not shrink when
+ * the keyboard opens. Publishing the covered height lets CSS lift the sheet to
+ * the top edge of the keyboard, and capping its height keeps the whole sheet
+ * inside what is actually visible. Browsers that resize the layout viewport
+ * for the keyboard report no covered area, so the inset naturally stays 0.
+ */
+function useKeyboardInset(active: boolean, dialogRef: RefObject<HTMLDialogElement | null>) {
+  useEffect(() => {
+    if (!active) return
+    const dialog = dialogRef.current
+    if (!dialog) return
+    const viewport = window.visualViewport
+    let frame = 0
+
+    const measure = () => {
+      frame = 0
+      const height = viewport?.height ?? window.innerHeight
+      const top = viewport?.offsetTop ?? 0
+      const inset = Math.max(0, window.innerHeight - height - top)
+      dialog.style.setProperty('--keyboard-inset', `${Math.round(inset)}px`)
+      dialog.style.setProperty('--visual-viewport-height', `${Math.round(height)}px`)
+      // Above the keyboard the home-indicator inset is no longer at the edge
+      // of the sheet, so the footer can drop its extra safe-area padding.
+      dialog.classList.toggle('has-keyboard', inset > 4)
+    }
+
+    const schedule = () => {
+      if (frame) return
+      frame = window.requestAnimationFrame(measure)
+    }
+
+    measure()
+    viewport?.addEventListener('resize', schedule)
+    viewport?.addEventListener('scroll', schedule)
+    window.addEventListener('resize', schedule)
+    window.addEventListener('orientationchange', schedule)
+    return () => {
+      if (frame) window.cancelAnimationFrame(frame)
+      viewport?.removeEventListener('resize', schedule)
+      viewport?.removeEventListener('scroll', schedule)
+      window.removeEventListener('resize', schedule)
+      window.removeEventListener('orientationchange', schedule)
+      dialog.style.removeProperty('--keyboard-inset')
+      dialog.style.removeProperty('--visual-viewport-height')
+      dialog.classList.remove('has-keyboard')
+    }
+  }, [active, dialogRef])
+}
+
 interface ModalProps {
   open: boolean
   onClose: () => void
@@ -26,6 +78,8 @@ interface ModalProps {
   children: ReactNode
   panelClassName?: string
   closeOnBackdrop?: boolean
+  /** Element that should receive focus as soon as the dialog is on screen. */
+  initialFocusRef?: RefObject<HTMLElement | null>
 }
 
 export function Modal({
@@ -35,11 +89,14 @@ export function Modal({
   children,
   panelClassName,
   closeOnBackdrop = true,
+  initialFocusRef,
 }: ModalProps) {
   const dialogRef = useRef<HTMLDialogElement>(null)
   const closeTimer = useRef<number | null>(null)
-  const [mounted, setMounted] = useState(open)
+  // `rendered` outlives `open` only for the closing animation.
+  const [rendered, setRendered] = useState(open)
   const [visible, setVisible] = useState(false)
+  const show = open || rendered
 
   useEffect(() => {
     if (open) {
@@ -47,21 +104,17 @@ export function Modal({
         window.clearTimeout(closeTimer.current)
         closeTimer.current = null
       }
-      if (!mounted) {
-        // The mount pass below owns the first reveal; only a re-open that is
-        // still waiting for its close timer needs its own animation frame.
-        setMounted(true)
-        return
-      }
+      // Keeps the closing pass from unmounting while we reopen it.
+      setRendered(true)
       const frame = window.requestAnimationFrame(() => setVisible(true))
       return () => window.cancelAnimationFrame(frame)
     }
 
-    if (!mounted) return
+    if (!rendered) return
     setVisible(false)
     closeTimer.current = window.setTimeout(() => {
       dialogRef.current?.close()
-      setMounted(false)
+      setRendered(false)
       closeTimer.current = null
     }, 210)
 
@@ -71,23 +124,47 @@ export function Modal({
         closeTimer.current = null
       }
     }
-  }, [open, mounted])
+  }, [open, rendered])
 
-  useEffect(() => {
-    if (!mounted) return
+  // Opening happens in a layout effect so the dialog and its first input are
+  // live in the same task as the tap that opened it. iOS only raises the
+  // keyboard for focus calls made inside that gesture, not from a later frame.
+  useLayoutEffect(() => {
+    if (!show) return
     const dialog = dialogRef.current
     if (!dialog) return
-    if (!dialog.open) dialog.showModal()
-    lockPageScroll()
-    const frame = window.requestAnimationFrame(() => setVisible(true))
+    if (!dialog.open) {
+      dialog.showModal()
+      lockPageScroll()
+    }
     return () => {
-      window.cancelAnimationFrame(frame)
       if (dialog.open) dialog.close()
       unlockPageScroll()
     }
-  }, [mounted])
+  }, [show])
 
-  if (!mounted) return null
+  useKeyboardInset(show, dialogRef)
+
+  // Focus is handed over right after `showModal`, while the sheet is still in
+  // the opening gesture. `preventScroll` keeps the page behind it from
+  // jumping; an input that already has text continues from its end.
+  useLayoutEffect(() => {
+    if (!show || !open) return
+    const target = initialFocusRef?.current
+    if (!target) return
+    target.focus({ preventScroll: true })
+    if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
+      try {
+        const end = target.value.length
+        target.setSelectionRange(end, end)
+      } catch {
+        /* Some input types (date, number) do not expose a text selection. */
+      }
+      if (target instanceof HTMLTextAreaElement) target.scrollTop = target.scrollHeight
+    }
+  }, [show, open, initialFocusRef])
+
+  if (!show) return null
 
   return createPortal(
     <dialog
@@ -122,6 +199,7 @@ interface SheetProps {
   bodyClassName?: string
   closeOnBackdrop?: boolean
   closeLabel?: string
+  initialFocusRef?: RefObject<HTMLElement | null>
 }
 
 export function Sheet({
@@ -137,6 +215,7 @@ export function Sheet({
   bodyClassName,
   closeOnBackdrop = true,
   closeLabel = '关闭',
+  initialFocusRef,
 }: SheetProps) {
   return (
     <Modal
@@ -145,6 +224,7 @@ export function Sheet({
       labelledBy={titleId}
       panelClassName={cx('sheet-panel', panelClassName)}
       closeOnBackdrop={closeOnBackdrop}
+      initialFocusRef={initialFocusRef}
     >
       <div className="sheet-grabber" aria-hidden="true" />
       <header className="sheet-head">

@@ -9,12 +9,13 @@
   gap: 8px;
 }
 
-.idea-composer-text {
+.idea-sheet-text {
   display: block;
   width: 100%;
+  flex: 0 0 auto;
   min-height: 156px;
   max-height: 48dvh;
-  padding: 8px 1px 10px;
+  padding: 7px 1px 9px;
   border: 0;
   background: transparent;
   color: var(--ink);
@@ -27,12 +28,12 @@
   overflow-y: auto;
 }
 
-.idea-composer-text::placeholder {
+.idea-sheet-text::placeholder {
   color: var(--ink-faint);
   opacity: 0.9;
 }
 
-.idea-composer-text:focus {
+.idea-sheet-text:focus {
   outline: 0;
 }
 
@@ -537,10 +538,6 @@
 }
 
 /* Idea detail */
-.idea-detail-sheet {
-  max-height: 92dvh;
-}
-
 .idea-detail-sheet .sheet-head {
   align-items: center;
   padding-bottom: 5px;
@@ -597,27 +594,6 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-}
-
-.idea-detail-text {
-  width: 100%;
-  flex: 0 0 auto;
-  min-height: 148px;
-  padding: 7px 1px 9px;
-  border: 0;
-  background: transparent;
-  color: var(--ink);
-  resize: none;
-  font-family: var(--font-serif);
-  font-size: 18px;
-  line-height: 1.95;
-  letter-spacing: 0.025em;
-  field-sizing: content;
-  overflow-y: auto;
-}
-
-.idea-detail-text:focus {
-  outline: none;
 }
 
 .idea-detail-tags {
@@ -1155,11 +1131,7 @@
     display: inline;
   }
 
-  .idea-detail-sheet {
-    max-height: 84dvh;
-  }
-
-  .idea-detail-text {
+  .idea-sheet-text {
     font-size: 19px;
     min-height: 176px;
   }

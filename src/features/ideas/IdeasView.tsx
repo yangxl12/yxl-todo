@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Button, IconButton } from '../../components/Button'
 import { ConfirmSheet } from '../../components/ConfirmSheet'
@@ -10,10 +10,11 @@ import { IDEA_SORTS } from '../../lib/domains'
 import { useApp } from '../../lib/store'
 import type { Idea, IdeaSort } from '../../lib/types'
 import { IdeaCard } from './IdeaCard'
-import { IdeaComposer } from './IdeaComposer'
-import { IdeaDetailSheet } from './IdeaDetailSheet'
+import { IdeaSheet } from './IdeaSheet'
 
 const PAGE_SIZE = 30
+
+type IdeaSheetState = { mode: 'create' } | { mode: 'edit'; ideaId: string; idea: Idea } | null
 
 function normalizeSearch(value: string): string {
   return value.trim().toLocaleLowerCase('zh-CN')
@@ -39,13 +40,19 @@ export function IdeasView() {
   const [searchOpen, setSearchOpen] = useState(false)
   const [activeTag, setActiveTag] = useState<string | null>(null)
   const [sortOpen, setSortOpen] = useState(false)
-  const [composerOpen, setComposerOpen] = useState(false)
+  const [sheet, setSheet] = useState<IdeaSheetState>(null)
+  const [sheetOpen, setSheetOpen] = useState(false)
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
-  const [selectedIdea, setSelectedIdea] = useState<Idea | null>(null)
-  const [detailOpen, setDetailOpen] = useState(false)
   const [pendingDelete, setPendingDelete] = useState<Idea | null>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [lastAddedId, setLastAddedId] = useState<string | null>(null)
+  const searchInputRef = useRef<HTMLInputElement>(null)
+  // A blur can fold an empty search away just before the toolbar button's
+  // click lands. Remember whether the search was open when the press started,
+  // so the button closes instead of immediately reopening it.
+  const searchOpenRef = useRef(searchOpen)
+  const searchPressedOpenRef = useRef(false)
+  searchOpenRef.current = searchOpen
 
   const allTags = useMemo(() => {
     const counts = new Map<string, number>()
@@ -95,21 +102,23 @@ export function IdeasView() {
     return () => window.clearTimeout(timer)
   }, [lastAddedId])
 
-  const activeIdea = selectedIdea
-    ? (data.ideas.find((idea) => idea.id === selectedIdea.id) ?? selectedIdea)
-    : null
+  const activeIdea =
+    sheet?.mode === 'edit'
+      ? (data.ideas.find((idea) => idea.id === sheet.ideaId) ?? sheet.idea)
+      : null
 
   const currentSort = IDEA_SORTS.find((item) => item.value === data.prefs.ideaSort) ?? IDEA_SORTS[0]
   const shown = sortedIdeas.slice(0, visibleCount)
   const hasFilters = Boolean(query || activeTag)
 
   const openIdea = useCallback((idea: Idea) => {
-    setSelectedIdea(idea)
-    setDetailOpen(true)
+    setSheet({ mode: 'edit', ideaId: idea.id, idea })
+    setSheetOpen(true)
   }, [])
 
   const requestDelete = (idea: Idea) => {
-    setDetailOpen(false)
+    setSheet({ mode: 'edit', ideaId: idea.id, idea })
+    setSheetOpen(false)
     setPendingDelete(idea)
     setConfirmOpen(true)
   }
@@ -131,7 +140,15 @@ export function IdeasView() {
     setSearchOpen(false)
   }
 
-  const openComposer = () => setComposerOpen(true)
+  const openComposer = () => {
+    setSheet({ mode: 'create' })
+    setSheetOpen(true)
+  }
+
+  const closeSearch = () => {
+    setSearchOpen(false)
+    setQuery('')
+  }
 
   const handleSaved = (id: string) => {
     setLastAddedId(id)
@@ -139,7 +156,7 @@ export function IdeasView() {
     setSearchOpen(false)
     setActiveTag(null)
     setVisibleCount(PAGE_SIZE)
-    setComposerOpen(false)
+    setSheetOpen(false)
   }
 
   return (
@@ -164,11 +181,17 @@ export function IdeasView() {
             <IconButton
               label={searchOpen ? '收起搜索' : '搜索念头'}
               icon="search"
+              onPointerDown={(event) => {
+                event.preventDefault()
+                searchPressedOpenRef.current = searchOpenRef.current
+              }}
               onClick={() => {
-                setSearchOpen((open) => {
-                  if (open) setQuery('')
-                  return !open
-                })
+                const wasOpen = searchPressedOpenRef.current
+                searchPressedOpenRef.current = false
+                // The blur that this same press caused already dismissed it.
+                if (wasOpen && !searchOpen) return
+                if (searchOpen) closeSearch()
+                else setSearchOpen(true)
               }}
               className={searchOpen ? 'is-active' : undefined}
             />
@@ -179,21 +202,32 @@ export function IdeasView() {
           <div className="search-bar">
             <Icon name="search" size={17} />
             <input
+              ref={searchInputRef}
               type="search"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               onKeyDown={(event) => {
-                if (event.key === 'Escape') {
-                  setSearchOpen(false)
-                  setQuery('')
-                }
+                if (event.key === 'Escape') closeSearch()
+              }}
+              onBlur={() => {
+                // An empty search that loses focus folds back into the toolbar;
+                // a search with words stays, because its results are still in use.
+                if (!query.trim()) closeSearch()
               }}
               placeholder="搜念头或标签…"
               aria-label="搜索念头或标签"
               autoFocus
             />
             {query ? (
-              <IconButton label="清空搜索" icon="close" onClick={() => setQuery('')} />
+              <IconButton
+                label="清空搜索"
+                icon="close"
+                onPointerDown={(event) => event.preventDefault()}
+                onClick={() => {
+                  setQuery('')
+                  if (document.activeElement !== searchInputRef.current) setSearchOpen(false)
+                }}
+              />
             ) : null}
           </div>
         ) : null}
@@ -294,23 +328,16 @@ export function IdeasView() {
         document.body,
       )}
 
-      <IdeaComposer
-        open={composerOpen}
-        allTags={allTags}
-        onClose={() => setComposerOpen(false)}
-        onSaved={handleSaved}
-        onReopen={openComposer}
-      />
-
-      <IdeaDetailSheet
+      <IdeaSheet
+        key={sheet?.mode === 'edit' ? `idea-${sheet.ideaId}` : 'idea-create'}
+        open={sheetOpen}
+        mode={sheet?.mode ?? 'create'}
         idea={activeIdea}
-        open={detailOpen}
         allTags={allTags}
-        onClose={() => setDetailOpen(false)}
-        onRequestDelete={(idea) => {
-          setSelectedIdea(idea)
-          requestDelete(idea)
-        }}
+        onClose={() => setSheetOpen(false)}
+        onCreated={handleSaved}
+        onReopen={openComposer}
+        onRequestDelete={requestDelete}
       />
 
       <ChoiceSheet<IdeaSort>

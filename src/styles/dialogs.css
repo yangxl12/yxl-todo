@@ -1,10 +1,11 @@
 .modal {
   position: fixed;
   inset: auto 0 0 0;
+  bottom: var(--keyboard-inset, 0px);
   margin: 0 auto;
   width: 100%;
   max-width: 640px;
-  max-height: 92dvh;
+  max-height: min(92dvh, calc(var(--visual-viewport-height, 100dvh) - 8px));
   padding: 0;
   border: 1px solid var(--line-strong);
   border-bottom: 0;
@@ -12,6 +13,10 @@
   background: var(--sheet);
   color: var(--ink);
   overflow: hidden;
+  /* `clip` (where supported) keeps focus scrolling inside the body: the
+     dialog itself must never scroll its header out of view when the
+     keyboard shrinks the sheet around a focused textarea. */
+  overflow: clip;
   box-shadow: var(--shadow-float);
   opacity: 0;
   transform: translateY(22px);
@@ -119,6 +124,10 @@
   border-top: 1px solid var(--line-soft);
   background: var(--sheet);
   background: color-mix(in srgb, var(--sheet) 92%, transparent);
+}
+
+.modal.has-keyboard .sheet-foot {
+  padding-bottom: 13px;
 }
 
 .sheet-small {
@@ -615,8 +624,8 @@
 
 @media (min-width: 720px) {
   .modal {
-    bottom: 24px;
-    max-height: 86dvh;
+    bottom: calc(var(--keyboard-inset, 0px) + 24px);
+    max-height: min(86dvh, calc(var(--visual-viewport-height, 100dvh) - 32px));
     border-bottom: 1px solid var(--line-strong);
     border-radius: 10px;
   }
@@ -648,6 +657,6 @@
 
 @media (min-width: 980px) {
   .modal {
-    bottom: 26px;
+    bottom: calc(var(--keyboard-inset, 0px) + 26px);
   }
 }

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { Button } from '../../components/Button'
 import { Icon } from '../../components/Icon'
 import { Sheet } from '../../components/Modal'
@@ -26,28 +26,18 @@ export function GoalEditorSheet({
   onSave,
   onRequestDelete,
 }: GoalEditorSheetProps) {
-  const [title, setTitle] = useState('')
-  const [why, setWhy] = useState('')
-  const [domain, setDomain] = useState<DomainKey>(initialDomain)
-  const [dueDate, setDueDate] = useState<string | null>(null)
+  // The parent remounts this sheet for every open, so the saved goal (or a
+  // blank draft) is already in state before the dialog takes focus.
+  const [title, setTitle] = useState(mode === 'edit' && goal ? goal.title : '')
+  const [why, setWhy] = useState(mode === 'edit' && goal ? goal.why : '')
+  const [domain, setDomain] = useState<DomainKey>(
+    mode === 'edit' && goal ? goal.domain : initialDomain,
+  )
+  const [dueDate, setDueDate] = useState<string | null>(
+    mode === 'edit' && goal ? goal.dueDate : null,
+  )
   const [error, setError] = useState('')
   const titleRef = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    if (!open) return
-    if (mode === 'edit' && goal) {
-      setTitle(goal.title)
-      setWhy(goal.why)
-      setDomain(goal.domain)
-      setDueDate(goal.dueDate)
-    } else {
-      setTitle('')
-      setWhy('')
-      setDomain(initialDomain)
-      setDueDate(null)
-    }
-    setError('')
-  }, [goal, initialDomain, mode, open])
 
   const handleSave = () => {
     const cleaned = title.trim()
@@ -69,6 +59,7 @@ export function GoalEditorSheet({
       subtitle={mode === 'create' ? '先写方向，下一步可以慢慢补。' : '把方向调准确，再继续走。'}
       titleId="goal-editor-title"
       panelClassName="goal-editor-sheet"
+      initialFocusRef={titleRef}
       footer={
         <div className="sheet-foot-split">
           {mode === 'edit' && goal && onRequestDelete ? (

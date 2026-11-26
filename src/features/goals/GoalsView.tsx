@@ -69,8 +69,10 @@ export function GoalsView() {
   const [domainFilter, setDomainFilter] = useState<DomainKey | null>(null)
   const [goalEditor, setGoalEditor] = useState<GoalEditorState>(null)
   const [goalEditorOpen, setGoalEditorOpen] = useState(false)
+  const [goalEditorSession, setGoalEditorSession] = useState(0)
   const [taskEditor, setTaskEditor] = useState<TaskEditorState>(null)
   const [taskEditorOpen, setTaskEditorOpen] = useState(false)
+  const [taskEditorSession, setTaskEditorSession] = useState(0)
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget>(null)
   const [newGoalId, setNewGoalId] = useState<string | null>(null)
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
@@ -180,6 +182,7 @@ export function GoalsView() {
 
   const openNewGoal = () => {
     setGoalEditor({ mode: 'create' })
+    setGoalEditorSession((session) => session + 1)
     setGoalEditorOpen(true)
   }
 
@@ -190,11 +193,13 @@ export function GoalsView() {
 
   const openEditGoal = useCallback((goal: Goal) => {
     setGoalEditor({ mode: 'edit', goalId: goal.id })
+    setGoalEditorSession((session) => session + 1)
     setGoalEditorOpen(true)
   }, [])
 
   const openTaskEditor = useCallback((goalId: string, task: Task) => {
     setTaskEditor({ goalId, taskId: task.id })
+    setTaskEditorSession((session) => session + 1)
     setTaskEditorOpen(true)
   }, [])
 
@@ -544,12 +549,8 @@ export function GoalsView() {
         </>
       )}
 
-      <p className="goals-footnote">
-        <Icon name="bulb" size={14} />
-        一件件走完，进度会自己长出来；不需要手动改百分比。
-      </p>
-
       <GoalEditorSheet
+        key={`goal-editor-${goalEditorSession}`}
         open={goalEditorOpen}
         mode={goalEditor?.mode ?? 'create'}
         goal={editGoalObject}
@@ -560,6 +561,7 @@ export function GoalsView() {
       />
 
       <TaskEditorSheet
+        key={`task-editor-${taskEditorSession}`}
         open={taskEditorOpen}
         goal={taskGoal}
         task={taskObject}
