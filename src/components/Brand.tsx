@@ -1,6 +1,5 @@
+import brandMarkUrl from '../assets/brand-mark.png'
 import { cx } from '../lib/utils'
-
-const brandMarkUrl = `${import.meta.env.BASE_URL}pwa-192x192.png`
 
 export function Brand({ large = false }: { large?: boolean }) {
   return (
