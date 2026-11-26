@@ -6,6 +6,7 @@ dist-single/
 .env
 .env.*
 !.env.example
+.workbuddy/memory/
 .DS_Store
 Thumbs.db
 *.log

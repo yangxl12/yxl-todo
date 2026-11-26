@@ -168,7 +168,7 @@ function normalizeTask(value: unknown, now: number, usedIds: Set<string>): Task 
   if (!title) return null
   let id = stringValue(value.id).slice(0, 80)
   if (!id || usedIds.has(id)) {
-    id = crypto.randomUUID ? crypto.randomUUID() : `${now}-${Math.random().toString(36).slice(2)}`
+    id = newId()
   }
   usedIds.add(id)
   const createdAt = numberValue(value.createdAt, now)
@@ -187,15 +187,15 @@ function normalizeTask(value: unknown, now: number, usedIds: Set<string>): Task 
   }
 }
 
-function normalizeGoal(value: unknown, now: number, usedIdeas: Set<string>): Goal | null {
+function normalizeGoal(value: unknown, now: number, usedIds: Set<string>): Goal | null {
   if (!isRecord(value)) return null
   const title = stringValue(value.title).trim().slice(0, 120)
   if (!title) return null
   let id = stringValue(value.id).slice(0, 80)
-  if (!id || usedIdeas.has(id)) {
+  if (!id || usedIds.has(id)) {
     id = newId()
   }
-  usedIdeas.add(id)
+  usedIds.add(id)
   const createdAt = numberValue(value.createdAt, now)
   const tasks: Task[] = []
   const usedTaskIds = new Set<string>()
