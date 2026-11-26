@@ -9,6 +9,9 @@ html {
   text-size-adjust: 100%;
   scroll-behavior: smooth;
   scrollbar-gutter: stable;
+  /* The page itself never rubber-bands: pulling down at the top or up at the
+     bottom must not peel the whole layout away from the fixed dock. */
+  overscroll-behavior-y: none;
   background-color: var(--paper);
 }
 
@@ -22,6 +25,7 @@ body {
   margin: 0;
   min-width: 300px;
   min-height: 100dvh;
+  overscroll-behavior-y: none;
   background-color: var(--paper);
   background-image: var(--page-gradient);
   background-repeat: no-repeat;

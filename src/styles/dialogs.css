@@ -40,11 +40,41 @@
  */
 .modal::backdrop {
   background-color: transparent;
-  transition: background-color 200ms var(--ease-out);
 }
 
+/*
+ * The scrim fades in through a keyframe animation instead of a transition:
+ * the backdrop is created in the top layer on the same frame the sheet
+ * opens, and a transition has no earlier style to start from, so the page
+ * used to flip straight to the dark scrim before the sheet was even visible.
+ */
 .modal.is-open::backdrop {
   background-color: var(--scrim);
+  animation: scrimIn 220ms var(--ease-out) both;
+}
+
+@keyframes scrimIn {
+  from {
+    background-color: transparent;
+  }
+  to {
+    background-color: var(--scrim);
+  }
+}
+
+/* Leaving uses the same idea in reverse: the scrim follows the panel down
+   instead of snapping the page back to daylight underneath it. */
+.modal.is-closing::backdrop {
+  animation: scrimOut 200ms var(--ease-out) both;
+}
+
+@keyframes scrimOut {
+  from {
+    background-color: var(--scrim);
+  }
+  to {
+    background-color: transparent;
+  }
 }
 
 .modal:focus {

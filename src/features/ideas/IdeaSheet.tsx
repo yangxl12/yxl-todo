@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from 'react'
 import { Button } from '../../components/Button'
 import { Icon } from '../../components/Icon'
 import { Sheet } from '../../components/Modal'
@@ -104,6 +111,12 @@ export function IdeaSheet({
       applyHeight()
     })
   }, [applyHeight])
+
+  // Measure once before the sheet is painted: a long thought must not make
+  // the panel grow a frame into its own entrance animation.
+  useLayoutEffect(() => {
+    if (open) applyHeight()
+  }, [open, mode, idea?.id, applyHeight])
 
   // Draft only belongs to a thought that has not been saved yet. Writing it
   // from the change handlers keeps an edit sheet's text from ever being

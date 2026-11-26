@@ -244,7 +244,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 11px;
-  margin-top: 15px;
+  margin-top: 12px;
 }
 
 .idea-card {
@@ -258,18 +258,25 @@
   background: var(--card);
   box-shadow: var(--shadow-sm);
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
   transition: transform var(--dur-base) var(--ease-out),
     border-color var(--dur-base) ease, box-shadow var(--dur-base) ease;
 }
 
-.idea-card:hover {
-  transform: translateY(-2px);
-  border-color: var(--line-strong);
-  box-shadow: var(--shadow-md);
-}
+/* A tap opens the sheet straight away. Hover feedback belongs to pointers
+   that can actually hover, so a touch never flashes a border or shadow
+   underneath the finger before the sheet arrives. */
+@media (hover: hover) and (pointer: fine) {
+  .idea-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--line-strong);
+    box-shadow: var(--shadow-md);
+  }
 
-.idea-card:active {
-  transform: translateY(0);
+  .idea-card:active {
+    transform: translateY(0);
+  }
 }
 
 .idea-card.is-pinned::before {
@@ -441,12 +448,14 @@
   transition: transform var(--dur-base) var(--ease-out);
 }
 
-.idea-card:hover .idea-card-open {
-  color: var(--vermilion);
-}
+@media (hover: hover) and (pointer: fine) {
+  .idea-card:hover .idea-card-open {
+    color: var(--vermilion);
+  }
 
-.idea-card:hover .idea-card-open svg {
-  transform: translate(1px, -1px);
+  .idea-card:hover .idea-card-open svg {
+    transform: translate(1px, -1px);
+  }
 }
 
 .load-more {

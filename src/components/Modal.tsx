@@ -7,6 +7,8 @@ let scrollLockCount = 0
 
 function lockPageScroll() {
   if (scrollLockCount === 0) {
+    // `scrollbar-gutter: stable` on the root already holds the scrollbar's
+    // width while the sheet is up, so locking the scroll moves nothing.
     document.documentElement.classList.add('modal-open')
   }
   scrollLockCount += 1
@@ -106,8 +108,17 @@ export function Modal({
       }
       // Keeps the closing pass from unmounting while we reopen it.
       setRendered(true)
-      const frame = window.requestAnimationFrame(() => setVisible(true))
-      return () => window.cancelAnimationFrame(frame)
+      // The dialog has to be painted once in its closed state before the
+      // open class lands; a single frame can still be folded into the same
+      // style pass, which makes the sheet appear instead of rise.
+      let second = 0
+      const first = window.requestAnimationFrame(() => {
+        second = window.requestAnimationFrame(() => setVisible(true))
+      })
+      return () => {
+        window.cancelAnimationFrame(first)
+        if (second) window.cancelAnimationFrame(second)
+      }
     }
 
     if (!rendered) return
@@ -169,7 +180,12 @@ export function Modal({
   return createPortal(
     <dialog
       ref={dialogRef}
-      className={cx('modal', visible && open && 'is-open', panelClassName)}
+      className={cx(
+        'modal',
+        visible && open && 'is-open',
+        !open && rendered && 'is-closing',
+        panelClassName,
+      )}
       aria-labelledby={labelledBy}
       onCancel={(event) => {
         event.preventDefault()

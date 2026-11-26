@@ -176,7 +176,9 @@
   width: 100%;
   max-width: calc(var(--page-max) + var(--page-gutter) * 2);
   margin-inline: auto;
-  padding: 22px var(--page-gutter) 0;
+  /* Just enough air under the sticky header without pushing the first row of
+     content out of the fold on a phone. */
+  padding: 14px var(--page-gutter) 0;
   animation: pageArrive var(--dur-slow) var(--ease-out) both;
 }
 
@@ -594,7 +596,7 @@
 
 @media (min-width: 720px) {
   .page-container {
-    padding-top: 30px;
+    padding-top: 18px;
   }
 }
 
@@ -616,7 +618,7 @@
   }
 
   .topbar {
-    min-height: 70px;
+    min-height: 60px;
     padding-top: 0;
     padding-inline: max(
       calc((100% - var(--page-max) - var(--page-gutter) * 2) / 2 + var(--page-gutter)),
@@ -647,7 +649,7 @@
   }
 
   .page-container {
-    padding-top: 34px;
+    padding-top: 20px;
   }
 
   .update-banner {

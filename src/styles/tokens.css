@@ -64,7 +64,7 @@
   --dur-base: 220ms;
   --dur-slow: 380ms;
   --nav-height: 74px;
-  --topbar-height: 60px;
+  --topbar-height: 52px;
   --page-max: 920px;
   --page-gutter: clamp(18px, 4.6vw, 48px);
 }
