@@ -38,10 +38,10 @@ function FavoriteButton({ itemId, label = '收藏' }: { itemId: string; label?: 
       className={cx('save-button', favorite && 'is-saved')}
       onClick={toggle}
       aria-pressed={favorite}
-      aria-label={favorite ? `取消${label}` : label}
+      aria-label={favorite ? '取消收藏' : label}
+      title={favorite ? '取消收藏' : label}
     >
       <Icon name="bookmark" size={16} filled={favorite} />
-      <span>{favorite ? '已收好' : label}</span>
     </button>
   )
 }
@@ -64,8 +64,7 @@ function ScienceDetails({ item }: { item: FireMethod }) {
           研究依据
         </span>
         <span className="details-action">
-          展开
-          <Icon name="chevronDown" size={13} className="chevron" />
+          <Icon name="chevronDown" size={14} className="chevron" />
         </span>
       </summary>
       <div className="science-details-body">
@@ -90,9 +89,14 @@ function DailyEmber({ item, onSwap }: { item: FireItem; onSwap: () => void }) {
     <section className="daily-ember-wrap" aria-label="今日一焰">
       <div className="daily-ember-actions">
         <FavoriteButton itemId={item.id} label="收下这一焰" />
-        <button type="button" className="swap-button" onClick={onSwap}>
+        <button
+          type="button"
+          className="swap-button"
+          onClick={onSwap}
+          aria-label="换一焰"
+          title="换一焰"
+        >
           <Icon name="refresh" size={15} />
-          换一焰
         </button>
       </div>
 

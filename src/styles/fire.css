@@ -9,36 +9,52 @@
   gap: 8px;
 }
 
+/* Icon-only affordances: the icon is the whole button, the name lives in
+   aria-label and the tooltip. */
 .save-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  min-height: 34px;
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
   color: var(--ink-faint);
-  font-size: 10px;
-  letter-spacing: 0.03em;
-  transition: color var(--dur-fast) ease;
+  transition: color var(--dur-fast) ease, background-color var(--dur-fast) ease,
+    border-color var(--dur-fast) ease;
 }
 
 .save-button:hover {
   color: var(--ink);
+  background: var(--line-soft);
 }
 
 .save-button.is-saved {
   color: var(--vermilion);
 }
 
-.swap-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  min-height: 34px;
-  padding: 3px 11px;
+.daily-ember-actions .save-button {
   border: 1px solid var(--line);
-  border-radius: 99px;
+}
+
+.daily-ember-actions .save-button:not(.is-saved):hover {
+  background: transparent;
+  border-color: var(--line-strong);
+}
+
+/* The label is gone, so the tint carries the 已收好 state. */
+.daily-ember-actions .save-button.is-saved {
+  border-color: var(--vermilion-line);
+  background: var(--vermilion-soft);
+}
+
+.swap-button {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
   color: var(--ink-faint);
-  font-size: 10px;
-  letter-spacing: 0.035em;
   transition: color var(--dur-fast) ease, border-color var(--dur-fast) ease,
     background-color var(--dur-fast) ease;
 }
@@ -440,10 +456,9 @@
 }
 
 .fire-card .save-button {
-  gap: 3px;
-  margin-left: 2px;
-  padding-inline: 3px;
-  font-size: 9.5px;
+  width: 28px;
+  height: 28px;
+  margin: -4px -6px -4px 2px;
 }
 
 .fire-card > .fire-type {
@@ -516,11 +531,20 @@
 }
 
 .details-action {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
   color: var(--ink-ghost);
-  font-size: 9px;
+  transition: color var(--dur-fast) ease;
+}
+
+.science-details summary:hover .details-action {
+  color: var(--ink);
+}
+
+.science-details summary .chevron {
+  transition: transform var(--dur-base) var(--ease-out);
 }
 
 .science-details[open] .details-action .chevron {
@@ -683,17 +707,6 @@
 }
 
 @media (max-width: 440px) {
-  .daily-ember-actions .save-button {
-    min-height: 30px;
-    padding: 3px 9px;
-    border: 1px solid var(--line);
-    border-radius: 99px;
-  }
-
-  .daily-ember-actions .save-button span {
-    display: inline;
-  }
-
   .fire-section-head {
     align-items: flex-start;
   }

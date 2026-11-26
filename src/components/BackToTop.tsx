@@ -46,9 +46,9 @@ export function BackToTop({ threshold = 620 }: BackToTopProps) {
       tabIndex={visible ? 0 : -1}
       aria-hidden={!visible}
       aria-label="回到顶部"
+      title="回到顶部"
     >
-      <Icon name="arrowUp" size={14} />
-      <span>回顶</span>
+      <Icon name="arrowUp" size={15} />
     </button>,
     document.body,
   )

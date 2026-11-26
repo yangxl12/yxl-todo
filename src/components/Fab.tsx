@@ -2,25 +2,20 @@ import { createPortal } from 'react-dom'
 import { Icon } from './Icon'
 
 interface FabProps {
-  /** One character that names what gets added, e.g. 记 or 立. */
-  glyph: string
+  /** What gets added, e.g. 新增念头. The plus reads the same on every page. */
   label: string
   onClick: () => void
 }
 
 /**
- * The floating seal both streams use to add something new. It lives in a
- * portal so a page's scroll container can never clip it.
+ * The quiet way to add something. A plain outlined plus instead of a red seal:
+ * adding is the most frequent action here, so it should be easy to hit and
+ * easy to ignore. Lives in a portal so a page's scroll container can't clip it.
  */
-export function Fab({ glyph, label, onClick }: FabProps) {
+export function Fab({ label, onClick }: FabProps) {
   return createPortal(
     <button type="button" className="fab" onClick={onClick} aria-label={label} title={label}>
-      <span className="fab-glyph" aria-hidden="true">
-        {glyph}
-      </span>
-      <span className="fab-plus" aria-hidden="true">
-        <Icon name="plus" size={12} />
-      </span>
+      <Icon name="plus" size={20} />
     </button>,
     document.body,
   )

@@ -317,7 +317,7 @@ export function IdeasView() {
         )}
       </section>
 
-      <Fab glyph="记" label="新增念头" onClick={openComposer} />
+      <Fab label="新增念头" onClick={openComposer} />
 
       <IdeaSheet
         key={sheet?.mode === 'edit' ? `idea-${sheet.ideaId}` : 'idea-create'}

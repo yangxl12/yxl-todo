@@ -573,7 +573,7 @@ export function GoalsView() {
         onChange={(value) => dispatch({ type: 'prefs/update', patch: { goalSort: value } })}
       />
 
-      <Fab glyph="立" label="新增目标" onClick={openNewGoal} />
+      <Fab label="新增目标" onClick={openNewGoal} />
     </div>
   )
 }
