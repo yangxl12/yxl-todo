@@ -752,6 +752,49 @@
   letter-spacing: 0.01em;
 }
 
+.style-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 5px;
+  margin-top: 5px;
+}
+
+.style-chip {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 5px;
+  padding: 5px 4px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: transparent;
+  transition: border-color var(--dur-fast) ease, background-color var(--dur-fast) ease;
+}
+
+.style-chip:hover {
+  border-color: var(--line-strong);
+}
+
+.style-chip.is-selected {
+  border-color: var(--vermilion-line);
+  background: var(--vermilion-soft);
+}
+
+.style-chip:disabled {
+  opacity: 0.55;
+}
+
+.style-name {
+  font-family: var(--font-serif);
+  font-size: 13px;
+  letter-spacing: 0.06em;
+}
+
+.style-master {
+  font-size: 9.5px;
+  color: var(--ink-faint);
+}
+
 .think-toggle {
   display: flex;
   align-items: center;

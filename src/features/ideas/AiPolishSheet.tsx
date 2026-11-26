@@ -1,7 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import { DeepSeekError as DeepSeekRequestError, polishText, type TokenUsage } from '../../lib/deepseek'
+import {
+  DeepSeekError as DeepSeekRequestError,
+  polishText,
+  type PolishMode,
+  type PolishStyle,
+  type TokenUsage,
+} from '../../lib/deepseek'
 import { useApp } from '../../lib/store'
-import type { PolishMode } from '../../lib/deepseek'
 import { Button, IconButton } from '../../components/Button'
 import { Sheet } from '../../components/Modal'
 import { Icon } from '../../components/Icon'
@@ -19,13 +24,23 @@ interface AiPolishSheetProps {
 type RunState = 'idle' | 'running' | 'done' | 'stopped' | 'error'
 
 const MODES: Array<{ value: PolishMode; label: string; hint: string }> = [
-  { value: 'clear', label: '理顺', hint: '顺一顺，保留原声' },
-  { value: 'concise', label: '收紧', hint: '删冗长，更有力' },
-  { value: 'literary', label: '添彩', hint: '添一点画面与节奏' },
+  { value: 'clear', label: '理顺', hint: '顺句子，留原声' },
+  { value: 'concise', label: '收紧', hint: '削三成，见骨头' },
+  { value: 'literary', label: '文气', hint: '短句留白，见筋骨' },
+]
+
+const STYLES: Array<{ value: PolishStyle; label: string; hint: string }> = [
+  { value: 'cold', label: '冷硬', hint: '古龙' },
+  { value: 'plain', label: '极简', hint: '海明威' },
+  { value: 'own', label: '本色', hint: '像你自己' },
 ]
 
 function modeName(mode: PolishMode): string {
   return MODES.find((item) => item.value === mode)?.label ?? '理顺'
+}
+
+function styleName(style: PolishStyle): string {
+  return STYLES.find((item) => item.value === style)?.label ?? '冷硬'
 }
 
 function usageLine(usage: TokenUsage | null): string | null {
@@ -46,8 +61,9 @@ export function AiPolishSheet({
   contextLabel = '正在润色这则念头',
 }: AiPolishSheetProps) {
   const { data, dispatch } = useApp()
-  const [mode, setMode] = useState<PolishMode>('clear')
-  const [thinking, setThinking] = useState(false)
+  const [mode, setMode] = useState<PolishMode>('literary')
+  const [style, setStyle] = useState<PolishStyle>('cold')
+  const [thinking, setThinking] = useState(true)
   const [runState, setRunState] = useState<RunState>('idle')
   const [content, setContent] = useState('')
   const [reasoning, setReasoning] = useState('')
@@ -100,8 +116,9 @@ export function AiPolishSheet({
       clearStreamTimer()
       pendingContent.current = ''
       pendingReasoning.current = ''
-      setMode('clear')
-      setThinking(false)
+      setMode('literary')
+      setStyle('cold')
+      setThinking(true)
       setRunState('idle')
       setContent('')
       setReasoning('')
@@ -180,6 +197,7 @@ export function AiPolishSheet({
         apiKey: key,
         model: data.prefs.model,
         mode,
+        style,
         text: sourceText,
         thinking,
         signal: controller.signal,
@@ -390,6 +408,23 @@ export function AiPolishSheet({
               </button>
             ))}
           </div>
+          {mode === 'literary' ? (
+            <div className="style-row" role="group" aria-label="文风">
+              {STYLES.map((item) => (
+                <button
+                  type="button"
+                  aria-pressed={style === item.value}
+                  key={item.value}
+                  className={cx('style-chip', style === item.value && 'is-selected')}
+                  onClick={() => setStyle(item.value)}
+                  disabled={runState === 'running'}
+                >
+                  <span className="style-name">{item.label}</span>
+                  <span className="style-master">{item.hint}</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
         </fieldset>
 
         <label className={cx('think-toggle', thinking && 'is-on')}>
@@ -398,7 +433,7 @@ export function AiPolishSheet({
               <Icon name="spark" size={15} />
               深思
             </span>
-            <span className="think-toggle-hint">更慢，通常更准确</span>
+            <span className="think-toggle-hint">先想清楚再落笔，慢一些</span>
           </span>
           <input
             type="checkbox"
@@ -432,7 +467,10 @@ export function AiPolishSheet({
       {runState === 'running' || content || runState === 'done' || runState === 'stopped' ? (
         <div className="ai-result-block">
           <div className="ai-result-head">
-            <span className="field-label">落笔 · {modeName(mode)}</span>
+            <span className="field-label">
+              落笔 · {modeName(mode)}
+              {mode === 'literary' ? ` · ${styleName(style)}` : ''}
+            </span>
             {runState === 'done' ? (
               <span className="ai-done-mark">
                 <Icon name="checkCircle" size={14} /> 完成
