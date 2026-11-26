@@ -10,3 +10,7 @@ dist-single/
 .DS_Store
 Thumbs.db
 *.log
+
+# Miora 画布与设计产物
+shiyan-logo.miora
+shiyan-logo_assets/

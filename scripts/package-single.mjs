@@ -66,10 +66,10 @@ for (const match of scripts) {
 html = html.replace(/\s*<link\b[^>]*rel="modulepreload"[^>]*>/gi, '')
 
 // Inline the icons so sharing only the HTML keeps the identity intact.
-const iconUri = await dataUriFor('icon.svg')
+const iconUri = await dataUriFor('favicon-32.png')
 html = html.replace(
   /<link\b[^>]*rel="icon"[^>]*>/i,
-  () => `<link rel="icon" type="image/svg+xml" href="${iconUri}" />`,
+  () => `<link rel="icon" type="image/png" href="${iconUri}" />`,
 )
 
 const appleIconUri = await dataUriFor('apple-touch-icon.png')

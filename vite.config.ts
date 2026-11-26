@@ -22,7 +22,7 @@ export default defineConfig(() => {
       VitePWA({
         registerType: 'prompt',
         injectRegister: false,
-        includeAssets: ['icon.svg', 'apple-touch-icon.png'],
+        includeAssets: ['favicon-32.png', 'apple-touch-icon.png'],
         manifest: {
           name: '拾焰 · 念行手记',
           short_name: '拾焰',

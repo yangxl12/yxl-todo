@@ -109,17 +109,11 @@
 }
 
 .brand-seal {
-  display: grid;
-  place-items: center;
   flex: 0 0 auto;
   width: 31px;
   height: 31px;
-  border: 1px solid var(--vermilion);
-  color: var(--vermilion);
-  font-family: var(--font-serif);
-  font-size: 17px;
-  line-height: 1;
-  transform: rotate(-2deg);
+  object-fit: cover;
+  border-radius: 8px;
 }
 
 .brand-copy {
@@ -153,7 +147,7 @@
 .brand-large .brand-seal {
   width: 47px;
   height: 47px;
-  font-size: 25px;
+  border-radius: 12px;
 }
 
 .brand-large .brand-name {
