@@ -47,7 +47,8 @@
   background: var(--vermilion-soft);
 }
 
-.swap-button {
+.swap-button,
+.copy-button {
   display: inline-grid;
   place-items: center;
   width: 32px;
@@ -59,7 +60,8 @@
     background-color var(--dur-fast) ease;
 }
 
-.swap-button:hover {
+.swap-button:hover,
+.copy-button:hover {
   color: var(--ink);
   border-color: var(--line-strong);
   background: var(--line-soft);
@@ -71,6 +73,22 @@
 
 .swap-button:hover svg {
   transform: rotate(90deg);
+}
+
+/* Copy answers in place: the glyph turns into a check and takes the moss tint,
+   so the confirmation sits exactly where the press happened. */
+.copy-button svg {
+  transition: transform var(--dur-base) var(--ease-out);
+}
+
+.copy-button.is-copied {
+  color: var(--moss);
+  border-color: color-mix(in srgb, var(--moss) 30%, transparent);
+  background: var(--moss-soft);
+}
+
+.copy-button.is-copied svg {
+  transform: scale(1.08);
 }
 
 .daily-ember {

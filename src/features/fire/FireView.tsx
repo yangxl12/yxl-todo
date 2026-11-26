@@ -1,8 +1,10 @@
-import { memo, useMemo, useState } from 'react'
+import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { BackToTop } from '../../components/BackToTop'
 import { Button } from '../../components/Button'
 import { EmptyState } from '../../components/EmptyState'
 import { Icon } from '../../components/Icon'
+import { useToast } from '../../components/Toast'
+import { writeClipboard } from '../../lib/clipboard'
 import {
   FIRE_ITEMS,
   getDailyFireIndex,
@@ -55,6 +57,57 @@ function TypeBadge({ kind }: { kind: FireItem['kind'] }) {
   )
 }
 
+/* The clipboard copy keeps the card's own wording: a quote keeps its
+   attribution, a method keeps the one action it asks for. */
+function emberText(item: FireItem): string {
+  if (item.kind === 'quote') {
+    return `${item.body}\n\n—— ${item.attribution}${item.source ? ` ${item.source}` : ''}`
+  }
+  return `${item.title}\n\n${item.summary}\n\n现在就做：${item.practice}`
+}
+
+function CopyButton({ text }: { text: string }) {
+  const { showToast } = useToast()
+  const [copied, setCopied] = useState(false)
+  const timer = useRef<number | null>(null)
+
+  useEffect(
+    () => () => {
+      if (timer.current !== null) window.clearTimeout(timer.current)
+    },
+    [],
+  )
+
+  const copy = async () => {
+    const done = await writeClipboard(text)
+    if (!done) {
+      showToast('复制没有成功，可以手动选中文字。', { tone: 'error' })
+      return
+    }
+    setCopied(true)
+    if (timer.current !== null) window.clearTimeout(timer.current)
+    timer.current = window.setTimeout(() => {
+      setCopied(false)
+      timer.current = null
+    }, 1800)
+  }
+
+  return (
+    <button
+      type="button"
+      className={cx('copy-button', copied && 'is-copied')}
+      onClick={copy}
+      aria-label={copied ? '已复制' : '复制这一焰'}
+      title={copied ? '已复制' : '复制'}
+    >
+      <Icon name={copied ? 'check' : 'copy'} size={14} />
+      <span className="sr-only" aria-live="polite">
+        {copied ? '已复制' : ''}
+      </span>
+    </button>
+  )
+}
+
 function ScienceDetails({ item }: { item: FireMethod }) {
   return (
     <details className="science-details">
@@ -88,6 +141,7 @@ function DailyEmber({ item, onSwap }: { item: FireItem; onSwap: () => void }) {
   return (
     <section className="daily-ember-wrap" aria-label="今日一焰">
       <div className="daily-ember-actions">
+        <CopyButton text={emberText(item)} />
         <FavoriteButton itemId={item.id} label="收下这一焰" />
         <button
           type="button"
@@ -117,7 +171,6 @@ function DailyEmber({ item, onSwap }: { item: FireItem; onSwap: () => void }) {
               <span className="attribution-line" aria-hidden="true" />
               <span>{item.attribution}</span>
               <span className="attribution-work">{item.source}</span>
-              {item.translated ? <span className="translation-mark">中文译文</span> : null}
             </div>
           </>
         ) : (
@@ -155,7 +208,6 @@ const MethodCard = memo(function MethodCard({ item, index }: { item: FireMethod;
         <span className="theme-tag">{item.theme}</span>
         <FavoriteButton itemId={item.id} />
       </div>
-      <TypeBadge kind="method" />
       <h3 className="fire-card-title">{item.title}</h3>
       <p className="fire-card-summary">{item.summary}</p>
       <div className="practice-box">
@@ -235,7 +287,9 @@ export function FireView() {
     <div className="fire-view">
       <h1 className="sr-only">火种</h1>
 
-      {filter === 'all' ? <DailyEmber item={activeHero} onSwap={swap} /> : null}
+      {/* Kept in every filter: it is the page's anchor, and hiding it made the
+          top of the page unreachable once a tab was picked. */}
+      <DailyEmber item={activeHero} onSwap={swap} />
 
       <div className="fire-tabs" role="group" aria-label="火种分类">
         {FILTERS.map((item) => (

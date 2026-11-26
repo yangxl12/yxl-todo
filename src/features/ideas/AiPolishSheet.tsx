@@ -5,6 +5,7 @@ import type { PolishMode } from '../../lib/deepseek'
 import { Button, IconButton } from '../../components/Button'
 import { Sheet } from '../../components/Modal'
 import { Icon } from '../../components/Icon'
+import { writeClipboard } from '../../lib/clipboard'
 import { cx, cleanAiText, formatNumber } from '../../lib/utils'
 
 interface AiPolishSheetProps {
@@ -35,15 +36,6 @@ function usageLine(usage: TokenUsage | null): string | null {
     parts.push(`缓存 ${Math.round((usage.cacheHitTokens / usage.promptTokens) * 100)}%`)
   }
   return parts.join(' · ')
-}
-
-async function writeClipboard(text: string): Promise<boolean> {
-  try {
-    await navigator.clipboard.writeText(text)
-    return true
-  } catch {
-    return false
-  }
 }
 
 export function AiPolishSheet({
