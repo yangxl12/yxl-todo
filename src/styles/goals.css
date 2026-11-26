@@ -279,10 +279,6 @@
   white-space: nowrap;
 }
 
-.goal-due.is-soft {
-  color: var(--ink-ghost);
-}
-
 .goal-due.due-overdue {
   color: var(--vermilion);
 }
@@ -296,6 +292,7 @@
   place-items: center;
   width: 21px;
   height: 21px;
+  margin-left: auto;
   border: 1px solid var(--moss);
   color: var(--moss);
   font-family: var(--font-serif);
@@ -412,21 +409,24 @@
   }
 }
 
-.goal-empty-tasks {
-  padding: 14px 0 8px;
+.task-add-open {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 40px;
+  padding: 4px 0 4px 9px;
+  margin-top: 6px;
+  color: var(--ink-ghost);
+  transition: color var(--dur-fast) ease;
 }
 
-.goal-empty-tasks p {
-  font-family: var(--font-serif);
-  font-size: 14px;
-  color: var(--ink-soft);
+.task-list + .task-add-open {
+  border-top: 1px solid var(--line-soft);
 }
 
-.goal-empty-tasks span {
-  display: block;
-  margin-top: 3px;
-  color: var(--ink-faint);
-  font-size: 10px;
+.task-add-open:hover,
+.task-add-open:focus-visible {
+  color: var(--vermilion);
 }
 
 .task-list {
@@ -594,39 +594,6 @@
   opacity: 0.85;
 }
 
-.completed-tasks {
-  margin-top: 4px;
-}
-
-.completed-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  width: 100%;
-  min-height: 38px;
-  padding: 8px 0;
-  color: var(--ink-faint);
-  font-size: 10px;
-  letter-spacing: 0.03em;
-  text-align: left;
-}
-
-.completed-toggle:hover {
-  color: var(--ink-soft);
-}
-
-.completed-label {
-  padding: 8px 0;
-  color: var(--ink-faint);
-  font-size: 9px;
-  letter-spacing: 0.04em;
-}
-
-.task-list-done .task-title {
-  color: var(--ink-faint);
-}
-
 .task-add {
   display: flex;
   align-items: center;
@@ -634,6 +601,18 @@
   margin-top: 6px;
   padding-top: 8px;
   border-top: 1px solid var(--line-soft);
+  animation: taskAddIn var(--dur-fast) var(--ease-out) both;
+}
+
+@keyframes taskAddIn {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 .task-add-mark {
@@ -684,13 +663,6 @@
 .task-add-submit:disabled {
   opacity: 0.3;
   cursor: default;
-}
-
-.task-add-hint {
-  margin: 1px 0 0 27px;
-  color: var(--ink-ghost);
-  font-size: 9.5px;
-  letter-spacing: 0.02em;
 }
 
 .goal-finished-note {

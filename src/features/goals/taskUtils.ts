@@ -34,7 +34,9 @@ export function latestCompletion(goal: Goal): number {
   return latest
 }
 
-export function orderOpenTasks(tasks: Task[]): Task[] {
+/** Order steps by due date, then priority, then age — `done` is ignored so a
+ *  ticked step keeps its slot instead of jumping to the bottom. */
+export function orderTasks(tasks: Task[]): Task[] {
   return [...tasks].sort((a, b) => {
     if (a.dueDate !== b.dueDate) {
       if (!a.dueDate) return 1
@@ -44,10 +46,6 @@ export function orderOpenTasks(tasks: Task[]): Task[] {
     if (a.priority !== b.priority) return PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority]
     return a.createdAt - b.createdAt
   })
-}
-
-export function orderDoneTasks(tasks: Task[]): Task[] {
-  return [...tasks].sort((a, b) => (b.completedAt ?? 0) - (a.completedAt ?? 0))
 }
 
 export function goalTaskCounts(goals: Goal[]): { total: number; done: number } {

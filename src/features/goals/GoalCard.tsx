@@ -1,11 +1,11 @@
-import { memo, useCallback, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
+import { memo, useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { Button, IconButton } from '../../components/Button'
 import { Icon } from '../../components/Icon'
 import { DOMAIN_MAP, PRIORITY_LABEL } from '../../lib/domains'
 import { formatDueDate, getDueTone } from '../../lib/date'
 import type { Goal, Task } from '../../lib/types'
 import { cx } from '../../lib/utils'
-import { goalStats, orderDoneTasks, orderOpenTasks } from './taskUtils'
+import { goalStats, orderTasks } from './taskUtils'
 
 interface GoalCardProps {
   goal: Goal
@@ -89,20 +89,21 @@ export const GoalCard = memo(function GoalCard({
   onAddTask,
 }: GoalCardProps) {
   const [taskTitle, setTaskTitle] = useState('')
-  const [showDone, setShowDone] = useState(false)
+  const [adding, setAdding] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const { total, done: doneCount, complete, progress } = goalStats(goal)
 
-  // Task lists are only needed while the card is open; keeping them out of the
-  // collapsed path saves two filters and two sorts per card per render.
-  const openTasks = expanded
-    ? orderOpenTasks(goal.tasks.filter((task) => !task.done))
-    : EMPTY_TASKS
-  const doneTasks = expanded ? orderDoneTasks(goal.tasks.filter((task) => task.done)) : EMPTY_TASKS
+  // A quiet plus is enough until someone actually wants to type.
+  useEffect(() => {
+    if (adding) inputRef.current?.focus()
+  }, [adding])
+
+  // Done steps stay in place so ticking one never moves the row under the
+  // finger; ordering ignores `done` for the same reason.
+  const orderedTasks = expanded ? orderTasks(goal.tasks) : EMPTY_TASKS
 
   const domain = DOMAIN_MAP[goal.domain]
   const tone = getDueTone(goal.dueDate, complete)
-  const showCompletedBlock = !complete && doneCount > 0
   const tasksId = `goal-tasks-${goal.id}`
   const percent = Math.round(progress * 100)
 
@@ -129,10 +130,20 @@ export const GoalCard = memo(function GoalCard({
     window.requestAnimationFrame(() => inputRef.current?.focus())
   }
 
+  const closeAdding = () => {
+    setAdding(false)
+    setTaskTitle('')
+  }
+
   const onInputKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'Enter') {
       event.preventDefault()
       submitTask()
+      return
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      closeAdding()
     }
   }
 
@@ -174,9 +185,7 @@ export const GoalCard = memo(function GoalCard({
               <Icon name="calendar" size={12} />
               {formatDueDate(goal.dueDate)}
             </span>
-          ) : (
-            <span className="goal-due is-soft">不设期</span>
-          )}
+          ) : null}
           {complete ? (
             <span className="achieved-stamp" aria-label="目标已达成">
               成
@@ -203,16 +212,9 @@ export const GoalCard = memo(function GoalCard({
 
       {expanded ? (
         <div className="goal-tasks" id={tasksId}>
-          {goal.tasks.length === 0 ? (
-            <div className="goal-empty-tasks">
-              <p>还没有下一步。</p>
-              <span>把第一步写小一点：小到今天就能开始。</span>
-            </div>
-          ) : null}
-
-          {openTasks.length ? (
+          {orderedTasks.length ? (
             <ul className="task-list">
-              {openTasks.map((task) => (
+              {orderedTasks.map((task) => (
                 <TaskRow
                   key={task.id}
                   task={task}
@@ -224,80 +226,43 @@ export const GoalCard = memo(function GoalCard({
             </ul>
           ) : null}
 
-          {showCompletedBlock ? (
-            <div className="completed-tasks">
+          {adding ? (
+            <form className="task-add" onSubmit={submitTask}>
+              <span className="task-add-mark" aria-hidden="true">
+                <Icon name="plus" size={15} />
+              </span>
+              <input
+                ref={inputRef}
+                value={taskTitle}
+                onChange={(event) => setTaskTitle(event.target.value)}
+                onKeyDown={onInputKeyDown}
+                onBlur={() => {
+                  if (!taskTitle.trim()) setAdding(false)
+                }}
+                placeholder="下一步，先做点什么？"
+                aria-label={`为「${goal.title}」添加一步`}
+                maxLength={300}
+                enterKeyHint="done"
+              />
               <button
-                type="button"
-                className="completed-toggle"
-                onClick={() => setShowDone((value) => !value)}
-                aria-expanded={showDone}
+                type="submit"
+                className="task-add-submit"
+                disabled={!taskTitle.trim()}
+                aria-label="添加这一步"
               >
-                <span>
-                  已完成 {doneCount} 步
-                </span>
-                <Icon
-                  name="chevronDown"
-                  size={14}
-                  className={cx('chevron', showDone && 'is-up')}
-                />
+                <Icon name="arrowRight" size={16} />
               </button>
-              {showDone ? (
-                <ul className="task-list task-list-done">
-                  {doneTasks.map((task) => (
-                    <TaskRow
-                      key={task.id}
-                      task={task}
-                      goalTitle={goal.title}
-                      onToggle={handleToggleTask}
-                      onEdit={handleEditTask}
-                    />
-                  ))}
-                </ul>
-              ) : null}
-            </div>
-          ) : null}
-
-          {complete && expanded && doneTasks.length ? (
-            <div className="completed-tasks">
-              <p className="completed-label">已走完的步子</p>
-              <ul className="task-list task-list-done">
-                {doneTasks.map((task) => (
-                  <TaskRow
-                    key={task.id}
-                    task={task}
-                    goalTitle={goal.title}
-                    onToggle={handleToggleTask}
-                    onEdit={handleEditTask}
-                  />
-                ))}
-              </ul>
-            </div>
-          ) : null}
-
-          <form className="task-add" onSubmit={submitTask}>
-            <span className="task-add-mark" aria-hidden="true">
-              <Icon name="plus" size={15} />
-            </span>
-            <input
-              ref={inputRef}
-              value={taskTitle}
-              onChange={(event) => setTaskTitle(event.target.value)}
-              onKeyDown={onInputKeyDown}
-              placeholder="下一步，先做点什么？"
-              aria-label={`为「${goal.title}」添加一步`}
-              maxLength={300}
-              enterKeyHint="done"
-            />
+            </form>
+          ) : (
             <button
-              type="submit"
-              className="task-add-submit"
-              disabled={!taskTitle.trim()}
-              aria-label="添加这一步"
+              type="button"
+              className="task-add-open"
+              aria-label={`为「${goal.title}」添加一步`}
+              onClick={() => setAdding(true)}
             >
-              <Icon name="arrowRight" size={16} />
+              <Icon name="plus" size={16} />
             </button>
-          </form>
-          <p className="task-add-hint">回车添加 · 点开一步可设日期与要紧程度</p>
+          )}
 
           {complete ? (
             <div className="goal-finished-note">
