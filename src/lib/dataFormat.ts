@@ -1,11 +1,11 @@
 import { parseDateKey } from './date'
-import { DEEPSEEK_MODELS, DEFAULT_MODEL } from './models'
+import { POLISH_MODEL } from './models'
 import type { AppData, Goal, Idea, Preferences, Task, TrashEntry } from './types'
 import { newId } from './utils'
 import { measureTrashEntry } from './trash'
 
 export function defaultPreferences(): Preferences {
-  return { apiKey: '', model: DEFAULT_MODEL, theme: 'system', ideaSort: 'recent', goalSort: 'due' }
+  return { apiKey: '', model: POLISH_MODEL.id, theme: 'system', ideaSort: 'recent', goalSort: 'due' }
 }
 
 export function createEmptyData(): AppData {
@@ -151,11 +151,13 @@ function decode(value: unknown, changes?: BackupChanges): AppData {
   const defaults = defaultPreferences()
   const prefs = fields<Preferences>(isRecord(value.prefs) ? value.prefs : {}, 'preferences', { ...defaults }, {
     apiKey: isText,
-    model: (v) => DEEPSEEK_MODELS.some((model) => model.value === v),
+    model: (v) => v === POLISH_MODEL.id || v === 'deepseek-v4-pro',
     theme: (v) => v === 'system' || v === 'light' || v === 'dark',
     ideaSort: (v) => v === 'recent' || v === 'oldest',
     goalSort: (v) => v === 'due' || v === 'newest' || v === 'progress',
   })
+  // Keep the v1 snapshot shape and migrate the previous selectable model in place.
+  prefs.model = POLISH_MODEL.id
 
   return {
     version: 1,

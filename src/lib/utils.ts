@@ -12,33 +12,6 @@ export function maskKey(key: string): string {
   return `${key.slice(0, 3)}••••••••${key.slice(-4)}`
 }
 
-export function cleanAiText(text: string): string {
-  let result = text.trim()
-  result = result.replace(/^```(?:text|markdown|md)?\s*\n?/i, '').replace(/\n?```$/, '')
-  // Models still like to announce the result; the正文 should start at the first sentence.
-  result = result.replace(
-    /^(?:以下是|这是|下面是|给你)?\s*(?:润色|改写|修改|重写)(?:后|过)?的(?:文本|版本|内容|稿子|正文)[:：]?\s*/i,
-    '',
-  )
-  // A pair of quotes wrapping the whole thing is the model talking, not the author.
-  const pairs: Array<[string, string]> = [
-    ['「', '」'],
-    ['“', '”'],
-    ['"', '"'],
-    ['《', '》'],
-  ]
-  for (const [open, close] of pairs) {
-    if (result.length > open.length + close.length && result.startsWith(open) && result.endsWith(close)) {
-      const inner = result.slice(open.length, result.length - close.length)
-      if (!inner.includes(close)) {
-        result = inner.trim()
-        break
-      }
-    }
-  }
-  return result.trim()
-}
-
 const numberFormatter = new Intl.NumberFormat('zh-CN')
 
 export function formatNumber(value: number): string {

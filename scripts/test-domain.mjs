@@ -9,7 +9,7 @@ const { createEmptyData, decodeLocalData } = await server.ssrLoadModule('/src/li
 const { createBackup, parseBackup } = await server.ssrLoadModule('/src/lib/backup.ts')
 const { moveToTrash, restoreFromTrash, reduceData } = await server.ssrLoadModule('/src/lib/operations.ts')
 const { TRASH_LIMIT_BYTES, measureTrashEntry } = await server.ssrLoadModule('/src/lib/trash.ts')
-const { polishText } = await server.ssrLoadModule('/src/lib/deepseek.ts')
+const { polishText, checkDeepSeekKey } = await server.ssrLoadModule('/src/lib/deepseek.ts')
 const { getTodayEntries, groupGoals } = await server.ssrLoadModule('/src/features/goals/taskUtils.ts')
 const { parseDateKey } = await server.ssrLoadModule('/src/lib/date.ts')
 
@@ -71,6 +71,17 @@ test('兼容旧裸格式，预览修复真实无效字段并拒绝未知版本',
   assert.ok(parseDateKey('2028-02-29'))
 })
 
+test('旧版 Pro 设置自动迁移，保留本地密钥与备份数据', () => {
+  const data = createEmptyData()
+  data.ideas = [idea('original')]
+  data.prefs = { ...data.prefs, model: 'deepseek-v4-pro', theme: 'dark', apiKey: 'local-key' }
+  const local = decodeLocalData(data)
+  assert.deepEqual(local, { ...data, prefs: { ...data.prefs, model: 'deepseek-flash' } })
+  const imported = parseBackup(JSON.stringify(createBackup(data)))
+  assert.deepEqual(imported.data, { ...local, prefs: { ...local.prefs, apiKey: '' } })
+  assert.deepEqual(imported.changes, {})
+})
+
 test('删除与恢复念头、目标和步骤，缺少父目标时保留步骤', () => {
   const state = { ...createEmptyData(), ideas: [idea('i')], goals: [goal('g')] }
   const removedIdea = moveToTrash(state, { kind: 'idea', id: 'i' }, 'r1', 10)
@@ -122,9 +133,9 @@ test('目标分组和今日清单可用同一个日期重算', () => {
   assert.deepEqual(groupGoals(goals, 'due').completed.map((item) => item.id), ['done'])
 })
 
-const message = 'data: {"choices":[{"delta":{"content":"中文输出"}}]}\r\n\r\n'
+const message = ': keep-alive\r\n\r\ndata: {"choices":\r\ndata: [{"delta":{"content":"《中文输出》"}}]}\r\n\n'
 const end = (reason) => 'data: {"choices":[{"finish_reason":"' + reason + '"}]}\n\ndata: [DONE]\n\n'
-const options = { apiKey: 'mock', model: 'deepseek-flash', mode: 'clear', text: '原文', thinking: false }
+const options = { apiKey: 'mock', mode: 'clear', text: '原文', thinking: false }
 
 test('AI 支持逐字节 UTF-8 分块，只有终止帧和 stop 同时出现才完整', async (t) => {
   const fallback = globalThis.fetch
@@ -134,17 +145,36 @@ test('AI 支持逐字节 UTF-8 分块，只有终止帧和 stop 同时出现才�
     [message + end('length'), 'truncated'],
     [message, 'truncated'],
     [message + 'data: [DONE]\n\n', 'truncated'],
+    [message + end('stop').trimEnd(), 'truncated'],
     [message + 'data: broken\n\n' + end('stop'), 'truncated'],
   ]) {
-    globalThis.fetch = async () => new Response(new ReadableStream({
-      start(controller) {
-        for (const byte of new TextEncoder().encode(events)) controller.enqueue(Uint8Array.of(byte))
-        controller.close()
-      },
-    }))
-    const result = await polishText(options)
-    assert.equal(result.text, '中文输出')
+    globalThis.fetch = async (_url, { body }) => {
+      const request = JSON.parse(body)
+      assert.equal(request.model, 'deepseek-flash')
+      assert.deepEqual(request.messages[1], { role: 'user', content: options.text })
+      return new Response(new ReadableStream({
+        start(controller) {
+          for (const byte of new TextEncoder().encode(events)) controller.enqueue(Uint8Array.of(byte))
+          controller.close()
+        },
+      }))
+    }
+    const result = await polishText({ ...options, model: 'deepseek-v4-pro' })
+    assert.equal(result.text, '《中文输出》')
     assert.equal(result.status, expected)
+  }
+})
+
+test('空白、内容过滤与服务端错误无法产生完整稿件', async (t) => {
+  const fallback = globalThis.fetch
+  t.after(() => { globalThis.fetch = fallback })
+  for (const [events, kind] of [
+    ['data: {"choices":[{"delta":{"content":" "}}]}\n\n' + end('stop'), 'empty'],
+    [message + end('content_filter'), 'request'],
+    [message + 'data: {"error":{"message":"upstream error"}}\n\n', 'server'],
+  ]) {
+    globalThis.fetch = async () => new Response(events)
+    await assert.rejects(polishText(options), { kind })
   }
 })
 
@@ -161,6 +191,42 @@ test('AI 超时和主动停止可区分', async (t) => {
   assert.equal((await stopped).status, 'stopped')
   t.mock.timers.enable({ apis: ['setTimeout'] })
   const timedOut = polishText(options)
-  t.mock.timers.tick(150000)
+  t.mock.timers.tick(35000)
   await assert.rejects(timedOut, { kind: 'timeout' })
+})
+
+test('保活帧无法延长等待，正文到达后重新计时', async (t) => {
+  const fallback = globalThis.fetch
+  t.after(() => { globalThis.fetch = fallback })
+  let didReceiveContent
+  const receivedContent = new Promise((resolve) => { didReceiveContent = resolve })
+  let stream
+  globalThis.fetch = async (_url, { signal }) => new Response(new ReadableStream({
+    start(controller) {
+      stream = controller
+      signal.addEventListener('abort', () => controller.error(signal.reason), { once: true })
+    },
+  }))
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  const stalled = polishText({ ...options, onContent: didReceiveContent })
+  const failure = assert.rejects(stalled, { kind: 'timeout' })
+  const encode = new TextEncoder()
+  t.mock.timers.tick(30000)
+  stream.enqueue(encode.encode(message))
+  await receivedContent
+  t.mock.timers.tick(30000)
+  stream.enqueue(encode.encode(': keep-alive\n\n'))
+  t.mock.timers.tick(4999)
+  assert.doesNotThrow(() => stream.enqueue(encode.encode(': keep-alive\n\n')))
+  t.mock.timers.tick(1)
+  await failure
+})
+
+test('验证连接要求密钥可访问 Flash', async (t) => {
+  const fallback = globalThis.fetch
+  t.after(() => { globalThis.fetch = fallback })
+  globalThis.fetch = async () => Response.json({ data: [{ id: 'deepseek-v4-pro' }] })
+  await assert.rejects(checkDeepSeekKey('mock-key'), { kind: 'server' })
+  globalThis.fetch = async () => Response.json({ data: [{ id: 'deepseek-flash' }] })
+  assert.equal(typeof await checkDeepSeekKey('mock-key'), 'number')
 })

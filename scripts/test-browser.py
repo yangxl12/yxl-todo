@@ -390,13 +390,19 @@ class BrowserTest(unittest.TestCase):
     def test_ai_rejects_partial_and_ignores_late_previous_run(self):
         self.page.set_viewport_size({"width": 390, "height": 844})
         self.page.emulate_media(reduced_motion="reduce", color_scheme="dark")
-        self.seed(library(idea("待润色原文"), key="mock-key"))
+        data = library(idea("待润色原文"), key="mock-key")
+        data["prefs"]["model"] = "deepseek-v4-pro"
+        self.seed(data)
         self.open_app()
         self.page.evaluate("""() => {
             window.mockStreams = [];
-            window.fetch = async () => new Response(new ReadableStream({
-              start(controller) { window.mockStreams.push(controller); }
-            }));
+            window.mockModels = [];
+            window.fetch = async (_url, { body }) => {
+              window.mockModels.push(JSON.parse(body).model);
+              return new Response(new ReadableStream({
+                start(controller) { window.mockStreams.push(controller); }
+              }));
+            };
         }""")
 
         def answer(index, text, finish=False):
@@ -429,7 +435,7 @@ class BrowserTest(unittest.TestCase):
         answer(0, "不完整")
         expect(ai.get_by_text("只收到部分文字。", exact=False)).to_be_visible()
         expect(ai.get_by_role("button", name="替换原文")).to_have_count(0)
-        ai.get_by_role("button", name="开始润色").click()
+        ai.get_by_role("button", name="再试一次").click()
         self.page.wait_for_function("mockStreams.length === 2")
         ai.get_by_role("button", name="停下").click()
         ai.get_by_role("button", name="重新落笔").click()
@@ -439,6 +445,8 @@ class BrowserTest(unittest.TestCase):
         expect(ai.get_by_text("本次润色", exact=True)).to_be_visible()
         expect(ai.get_by_text("旧请求", exact=True)).to_have_count(0)
         expect(ai.get_by_role("button", name="替换原文")).to_be_visible()
+        ai.get_by_role("button", name="文气").click()
+        expect(ai.get_by_text("落笔 · 理顺", exact=True)).to_be_visible()
         self.page.keyboard.press("Escape")
         expect(ai).not_to_be_visible()
         expect(original).to_be_focused()
@@ -447,11 +455,17 @@ class BrowserTest(unittest.TestCase):
         expect(ai.get_by_role("button", name="替换原文")).to_have_count(0)
         ai.get_by_role("button", name="开始润色").click()
         self.page.wait_for_function("mockStreams.length === 4")
-        answer(3, "已完成版本", True)
+        answer(3, "待润色原文", True)
+        expect(ai.get_by_text("这次润色保留了原来的写法。")).to_be_visible()
+        expect(ai.get_by_role("button", name="替换原文")).to_have_count(0)
+        ai.get_by_role("button", name="再来一版").click()
+        self.page.wait_for_function("mockStreams.length === 5")
+        answer(4, "已完成版本", True)
         ai.get_by_role("button", name="替换原文").click()
         expect(original).to_have_value("已完成版本")
         self.page.get_by_role("button", name="撤回", exact=True).click()
         expect(original).to_have_value("待润色原文")
+        self.assertEqual(self.page.evaluate("mockModels"), ["deepseek-flash"] * 5)
 
     def test_nested_settings_close_preserves_parent_and_focus(self):
         self.page.set_viewport_size({"width": 390, "height": 844})

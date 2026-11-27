@@ -45,14 +45,14 @@
 
 已适配当前 DeepSeek API 的这些能力：
 
-- 最新模型：`deepseek-flash` 与 `deepseek-v4-pro`（可在设置中切换）。
-- 思考模式：请求级 `thinking` 开关，深思时使用 `reasoning_effort: "high"`。
-- 流式输出：SSE 逐字显示；深思时单独折叠显示 `reasoning_content`。
+- 固定使用 DeepSeek V4.1 Flash（`deepseek-flash`），旧版模型设置自动迁移。
+- 默认快速理顺，保留原文的事实和语气。可选收紧、文气和深思。
+- 流式预览。只有完整结果可以替换原文，替换后可撤回。
 - 用量与上下文缓存：读取 `stream_options.include_usage` 的 usage，展示缓存命中与思考 token。
 - 浏览器端直连：DeepSeek API 支持跨域请求；不经过任何中转服务器。**Key 会存在于当前站点下**，
   因此不要把这套页面与共享 Key 一起使用。
 
-检测连接时调用只读的 `GET /models`，不会产生模型调用费用。页面不内置任何 Key，也不会上传 Key
+检测连接时调用只读的 `GET /models` 检查 Flash 是否可用，不会产生模型调用费用。页面不内置任何 Key，也不会上传 Key
 到 GitHub 或备份文件。
 
 参考文档：[思考模式](https://api-docs.deepseek.com/zh-cn/guides/thinking_mode/) ·

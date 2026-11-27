@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { DeepSeekError, TokenUsage } from '../../lib/deepseek'
 import type { PolishMode, PolishStyle } from '../../lib/polishPrompts'
-import { DEEPSEEK_MODELS } from '../../lib/models'
+import { POLISH_MODEL } from '../../lib/models'
 import { usePolishRun } from './usePolishRun'
 import { useApp } from '../../lib/store'
 import { Button, IconButton } from '../../components/Button'
@@ -21,14 +21,14 @@ interface AiPolishSheetProps {
 
 const MODES: Array<{ value: PolishMode; label: string; hint: string }> = [
   { value: 'clear', label: '理顺', hint: '顺句子，留原声' },
-  { value: 'concise', label: '收紧', hint: '削三成，见骨头' },
-  { value: 'literary', label: '文气', hint: '短句留白，见筋骨' },
+  { value: 'concise', label: '收紧', hint: '删重复，留细节' },
+  { value: 'literary', label: '文气', hint: '调措辞和节奏' },
 ]
 
 const STYLES: Array<{ value: PolishStyle; label: string; hint: string }> = [
-  { value: 'cold', label: '冷硬', hint: '古龙' },
-  { value: 'plain', label: '极简', hint: '海明威' },
-  { value: 'own', label: '本色', hint: '像你自己' },
+  { value: 'cold', label: '冷硬', hint: '短句直接' },
+  { value: 'plain', label: '极简', hint: '用词简省' },
+  { value: 'own', label: '本色', hint: '保留口气' },
 ]
 
 function modeName(mode: PolishMode): string {
@@ -58,11 +58,11 @@ export function AiPolishSheet({
   contextLabel = '正在润色这则念头',
 }: AiPolishSheetProps) {
   const { data, dispatch } = useApp()
-  const [mode, setMode] = useState<PolishMode>('literary')
+  const [mode, setMode] = useState<PolishMode>('clear')
   const [style, setStyle] = useState<PolishStyle>('cold')
-  const [thinking, setThinking] = useState(true)
+  const [thinking, setThinking] = useState(false)
   const { output, start: run, stop, cancel } = usePolishRun(open)
-  const { state: runState, content, reasoning, usage } = output
+  const { state: runState, content, reasoning, usage, input } = output
   const [localError, setError] = useState<string | null>(null)
   const [dismissedError, setDismissedError] = useState<DeepSeekError | null>(null)
   const [keyDraft, setKeyDraft] = useState('')
@@ -80,9 +80,9 @@ export function AiPolishSheet({
 
   useEffect(() => {
     if (!open) return
-    setMode('literary')
+    setMode('clear')
     setStyle('cold')
-    setThinking(true)
+    setThinking(false)
     setKeyDraft('')
     setKeyEditing(false)
     setShowKey(false)
@@ -101,19 +101,24 @@ export function AiPolishSheet({
     if (nearBottom) node.scrollTop = node.scrollHeight
   }, [content, runState])
 
+  const isRunning = runState === 'running'
+  const editingKey = !hasKey || keyEditing
+  const key = (editingKey ? keyDraft : apiKey).trim()
+  const canStart = !isRunning && Boolean(key && sourceText.trim())
+
   const start = () => {
-    const key = (keyEditing || !hasKey ? keyDraft : apiKey).trim()
-    if (!key || !sourceText.trim()) return
+    if (!canStart) return
     if (key !== apiKey) dispatch({ type: 'prefs/update', patch: { apiKey: key } })
     setKeyEditing(false)
     setError(null)
     setDismissedError(null)
     setCopied(false)
     setShowReasoning(false)
-    void run({ apiKey: key, model: data.prefs.model, mode, style, text: sourceText, thinking })
+    void run({ apiKey: key, mode, style, text: sourceText, thinking })
   }
 
-  const canReplace = runState === 'done' && output.source === sourceText
+  const unchanged = runState === 'done' && content === input?.text.trim()
+  const canReplace = runState === 'done' && !unchanged && input?.text === sourceText
   const handleApply = () => {
     if (!canReplace || !content) return
     onApply(content)
@@ -127,9 +132,6 @@ export function AiPolishSheet({
     window.setTimeout(() => setCopied(false), 1800)
   }
 
-  const canRun = runState !== 'running'
-  const editingKey = !hasKey || keyEditing
-  const keyReady = editingKey ? Boolean(keyDraft.trim()) : hasKey
   const noKeyMessage = 'AI 润色会把这段念头发送给 DeepSeek，并把 Key 留在本设备。'
 
   return (
@@ -145,20 +147,20 @@ export function AiPolishSheet({
       titleId="ai-polish-title"
       panelClassName="ai-sheet"
       bodyClassName="ai-sheet-body"
-      closeOnBackdrop={runState !== 'running'}
+      closeOnBackdrop={!isRunning}
       footer={
         canReplace ? (
           <>
-            <Button variant="ghost" icon="refresh" onClick={() => start()} disabled={!canRun}>
+            <Button variant="ghost" icon="refresh" onClick={start} disabled={!canStart}>
               再来一版
             </Button>
             <Button variant="primary" icon="check" onClick={handleApply}>
               替换原文
             </Button>
           </>
-        ) : runState === 'running' ? (
+        ) : isRunning ? (
           <>
-            <span className="ai-running-note">
+            <span className="ai-running-note" role="status">
               <span className="typing-dots" aria-hidden="true">
                 <i />
                 <i />
@@ -176,10 +178,11 @@ export function AiPolishSheet({
             <Button
               variant="primary"
               icon="spark"
-              onClick={() => start()}
-              disabled={!canRun || !keyReady || !sourceText.trim()}
+              onClick={start}
+              disabled={!canStart}
             >
-              {runState === 'error' ? '再试一次' : runState === 'stopped' ? '重新落笔' : '开始润色'}
+              {runState === 'done' ? '再来一版' : runState === 'stopped' ? '重新落笔'
+                : runState === 'error' || runState === 'truncated' ? '再试一次' : '开始润色'}
             </Button>
           </>
         )
@@ -219,9 +222,9 @@ export function AiPolishSheet({
                 if (errorKind === 'auth') setDismissedError(requestError)
               }}
               onKeyDown={(event) => {
-                if (event.key === 'Enter' && keyDraft.trim()) {
+                if (event.key === 'Enter' && !event.nativeEvent.isComposing && canStart) {
                   event.preventDefault()
-                  void start()
+                  start()
                 }
               }}
               placeholder="sk-... 粘贴 API Key"
@@ -273,7 +276,7 @@ export function AiPolishSheet({
                 key={item.value}
                 className={cx('mode-card', mode === item.value && 'is-selected')}
                 onClick={() => setMode(item.value)}
-                disabled={runState === 'running'}
+                disabled={isRunning}
               >
                 <span className="mode-name">{item.label}</span>
                 <span className="mode-hint">{item.hint}</span>
@@ -289,7 +292,7 @@ export function AiPolishSheet({
                   key={item.value}
                   className={cx('style-chip', style === item.value && 'is-selected')}
                   onClick={() => setStyle(item.value)}
-                  disabled={runState === 'running'}
+                  disabled={isRunning}
                 >
                   <span className="style-name">{item.label}</span>
                   <span className="style-master">{item.hint}</span>
@@ -311,16 +314,15 @@ export function AiPolishSheet({
             type="checkbox"
             checked={thinking}
             onChange={(event) => setThinking(event.target.checked)}
-            disabled={runState === 'running'}
+            disabled={isRunning}
           />
           <span className="switch" aria-hidden="true">
             <span />
           </span>
         </label>
         <p className="model-hint">
-          DeepSeek {DEEPSEEK_MODELS.find((model) => model.value === data.prefs.model)?.name}
-          {thinking ? ' · 思考模式' : ' · 快速模式'} · 可在设置中切换
-          {hasKey && !editingKey ? (
+          {POLISH_MODEL.name}
+          {hasKey && !editingKey && !isRunning ? (
             <button
               type="button"
               className="ai-key-change"
@@ -336,12 +338,12 @@ export function AiPolishSheet({
         </p>
       </div>
 
-      {runState === 'running' || content || runState === 'done' || runState === 'stopped' ? (
+      {input && (isRunning || content.trim() || runState === 'stopped') ? (
         <div className="ai-result-block">
           <div className="ai-result-head">
             <span className="field-label">
-              落笔 · {modeName(mode)}
-              {mode === 'literary' ? ` · ${styleName(style)}` : ''}
+              落笔 · {modeName(input.mode)}
+              {input.mode === 'literary' ? ` · ${styleName(input.style ?? 'cold')}` : ''}
             </span>
             {runState === 'done' ? (
               <span className="ai-done-mark">
@@ -362,7 +364,7 @@ export function AiPolishSheet({
               >
                 <span>
                   <Icon name="bulb" size={14} />
-                  {runState === 'running' ? '正在思考' : '思考过程'}
+                  {isRunning && !content ? '正在思考' : '思考过程'}
                   <span className="reasoning-count">{reasoning.length} 字</span>
                 </span>
                 <Icon name="chevronDown" size={14} className={cx('chevron', showReasoning && 'is-up')} />
@@ -371,7 +373,7 @@ export function AiPolishSheet({
             </div>
           ) : null}
 
-          <div className="ai-output" ref={outputRef} aria-live="polite">
+          {content || isRunning ? <div className="ai-output" ref={outputRef}>
             {content ? (
               <p className="ai-output-text">{content}</p>
             ) : (
@@ -381,8 +383,10 @@ export function AiPolishSheet({
                 <span className="ink-line ink-line-mid" />
               </div>
             )}
-            {runState === 'running' && content ? <span className="typing-caret" aria-hidden="true" /> : null}
-          </div>
+            {isRunning && content ? <span className="typing-caret" aria-hidden="true" /> : null}
+          </div> : null}
+
+          {unchanged ? <p className="inline-note">这次润色保留了原来的写法。</p> : null}
 
           {runState === 'truncated' ? (
             <p className="inline-note">
@@ -390,15 +394,13 @@ export function AiPolishSheet({
             </p>
           ) : null}
 
-          {runState !== 'running' && content ? (
+          {!isRunning && content.trim() ? (
             <div className="ai-result-meta">
               <span>{usageLine(usage) ?? (runState === 'done' ? 'DeepSeek 已完成这次润色' : '润色片段')}</span>
-              {content ? (
-                <button type="button" className="text-action" onClick={handleCopy}>
-                  <Icon name="copy" size={14} />
-                  {copied ? '已复制' : '复制'}
-                </button>
-              ) : null}
+              <button type="button" className="text-action" onClick={handleCopy}>
+                <Icon name="copy" size={14} />
+                {copied ? '已复制' : '复制'}
+              </button>
             </div>
           ) : null}
         </div>

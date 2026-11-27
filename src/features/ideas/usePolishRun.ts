@@ -8,14 +8,20 @@ interface RunOutput {
   reasoning: string
   usage: TokenUsage | null
   error: DeepSeekError | null
-  source: string
+  input: Pick<PolishOptions, 'text' | 'mode' | 'style'> | null
 }
 
-const EMPTY: RunOutput = { state: 'idle', content: '', reasoning: '', usage: null, error: null, source: '' }
+interface Session {
+  controller: AbortController
+  output: RunOutput
+  timer?: number
+}
+
+const EMPTY: RunOutput = { state: 'idle', content: '', reasoning: '', usage: null, error: null, input: null }
 
 export function usePolishRun(open: boolean) {
   const [output, setOutput] = useState<RunOutput>(EMPTY)
-  const session = useRef<{ controller: AbortController; output: RunOutput; timer?: number } | null>(null)
+  const session = useRef<Session | null>(null)
 
   const cancel = useCallback(() => {
     const current = session.current
@@ -38,9 +44,11 @@ export function usePolishRun(open: boolean) {
   }
 
   const start = async (options: Omit<PolishOptions, 'onContent' | 'onReasoning' | 'onUsage' | 'signal'>) => {
-    cancel()
-    const current = { controller: new AbortController(), output: { ...EMPTY, state: 'running', source: options.text } as RunOutput,
-      timer: undefined as number | undefined,
+    if (session.current) return
+    const { text, mode, style } = options
+    const current: Session = {
+      controller: new AbortController(),
+      output: { ...EMPTY, state: 'running', input: { text, mode, style } },
     }
     session.current = current
     setOutput(current.output)

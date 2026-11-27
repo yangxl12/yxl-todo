@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { IconButton } from '../../components/Button'
 import { checkDeepSeekKey } from '../../lib/deepseek'
-import { DEEPSEEK_MODELS } from '../../lib/models'
+import { POLISH_MODEL } from '../../lib/models'
 import { maskKey } from '../../lib/utils'
 import { Button } from '../../components/Button'
 import { Icon } from '../../components/Icon'
@@ -78,10 +78,10 @@ export function AiSettings({ open }: { open: boolean }) {
     setVerifying(true)
     setApiNotice(null)
     try {
-      const result = await checkDeepSeekKey(data.prefs.apiKey)
+      const latencyMs = await checkDeepSeekKey(data.prefs.apiKey)
       setApiNotice({
         tone: 'ok',
-        text: `连接正常 · ${result.latencyMs} 毫秒 · 可以调用 ${result.models.length || '可用'} 个模型`,
+        text: `${POLISH_MODEL.name} 连接正常 · ${latencyMs} 毫秒`,
       })
     } catch (error) {
       setApiNotice({
@@ -107,7 +107,7 @@ export function AiSettings({ open }: { open: boolean }) {
       </div>
 
       <p className="settings-description">
-        只有你主动润色的那段文字会发送给 DeepSeek；目标、任务和其他念头都不会离开这台设备。
+        润色使用 {POLISH_MODEL.name}。只有你主动润色的那段文字会发送给 DeepSeek。
       </p>
 
       {editingKey ? (
@@ -204,37 +204,6 @@ export function AiSettings({ open }: { open: boolean }) {
         </p>
       ) : null}
 
-      <div className="model-choice">
-        <span className="field-label">用哪个模型</span>
-        <div className="model-grid" role="group" aria-label="DeepSeek 模型">
-          {DEEPSEEK_MODELS.map((model) => (
-            <button
-              key={model.value}
-              type="button"
-              aria-pressed={data.prefs.model === model.value}
-              className={cx('model-option', data.prefs.model === model.value && 'is-selected')}
-              onClick={() =>
-                dispatch({ type: 'prefs/update', patch: { model: model.value } })
-              }
-            >
-              <span className="model-option-name">{model.name}</span>
-              <span className="model-option-hint">{model.hint}</span>
-              <span className="model-check" aria-hidden="true">
-                {data.prefs.model === model.value ? <Icon name="check" size={13} /> : null}
-              </span>
-            </button>
-          ))}
-        </div>
-        <p className="feature-badges">
-          <span>流式输出</span>
-          <span>深思模式</span>
-          <span>上下文缓存</span>
-          <a href="https://api-docs.deepseek.com/zh-cn/guides/thinking_mode/" target="_blank" rel="noreferrer">
-            DeepSeek 文档
-            <Icon name="external" size={11} />
-          </a>
-        </p>
-      </div>
     </section>
   )
 }
