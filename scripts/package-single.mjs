@@ -120,6 +120,9 @@ if (/\.woff2?(?:['")?#]|\s|$)/i.test(styleMarkup)) {
 }
 
 html = `<!-- 拾焰 · portable single-file build. Open directly in a browser; PWA install/service worker is intentionally disabled. -->\n${html}`
+// Vite can retain CRLF from the Windows input template and add another CR
+// at insertion points. Canonicalize the final HTML before comparing builds.
+html = html.replace(/\r+\n/g, '\n')
 await fs.writeFile(output, html, 'utf8')
 await fs.rm(dist, { recursive: true, force: true })
 
