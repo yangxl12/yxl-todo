@@ -1,3 +1,6 @@
+import { FIRE_METHODS } from './fireMethods'
+import { FIRE_QUOTES } from './fireQuotes'
+
 export type FireKind = 'method' | 'quote'
 
 export type FireTheme = '启动' | '专注' | '坚持' | '恢复' | '回望'
@@ -29,7 +32,7 @@ export interface FireQuote {
 
 export type FireItem = FireMethod | FireQuote
 
-export const FIRE_ITEMS: FireItem[] = [
+const ORIGINAL_METHODS: FireMethod[] = [
   {
     id: 'method-if-then',
     kind: 'method',
@@ -245,6 +248,9 @@ export const FIRE_ITEMS: FireItem[] = [
     sourceUrl: 'https://doi.org/10.1111/j.1467-8721.2006.00435.x',
     sourceLabel: 'DOI',
   },
+]
+
+const ORIGINAL_QUOTES: FireQuote[] = [
   {
     id: 'quote-confucius',
     kind: 'quote',
@@ -398,6 +404,18 @@ export const FIRE_ITEMS: FireItem[] = [
     translated: true,
   },
 ]
+
+const methods = [...ORIGINAL_METHODS, ...FIRE_METHODS]
+const quotes = [...ORIGINAL_QUOTES, ...FIRE_QUOTES]
+
+// Spread methods through the daily rotation while keeping the order within each category.
+export const FIRE_ITEMS: FireItem[] = methods.flatMap((method, index) => [
+  method,
+  ...quotes.slice(
+    Math.floor(index * quotes.length / methods.length),
+    Math.floor((index + 1) * quotes.length / methods.length),
+  ),
+])
 
 export function getDailyFireIndex(dayNumber: number): number {
   return ((dayNumber % FIRE_ITEMS.length) + FIRE_ITEMS.length) % FIRE_ITEMS.length

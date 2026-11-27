@@ -12,6 +12,7 @@ const { TRASH_LIMIT_BYTES, measureTrashEntry } = await server.ssrLoadModule('/sr
 const { polishText, checkDeepSeekKey } = await server.ssrLoadModule('/src/lib/deepseek.ts')
 const { getTodayEntries, groupGoals } = await server.ssrLoadModule('/src/features/goals/taskUtils.ts')
 const { parseDateKey } = await server.ssrLoadModule('/src/lib/date.ts')
+const { FIRE_ITEMS, getDailyFireIndex } = await server.ssrLoadModule('/src/features/fire/fireContent.ts')
 
 const idea = (id, text = '一则念头') => ({
   id, text, tags: ['标签'], pinned: false, pinnedAt: null, createdAt: 1, updatedAt: 1,
@@ -22,6 +23,18 @@ const task = (id) => ({
 })
 const goal = (id, tasks = [task('step')]) => ({
   id, title: '方向', why: '', domain: 'life', dueDate: '2026-11-28', createdAt: 1, updatedAt: 1, tasks,
+})
+
+test('今日一焰轮遍火种，同时把方法分散在燃句之间', () => {
+  const rotation = FIRE_ITEMS.map((_, day) => FIRE_ITEMS[getDailyFireIndex(day - 1)])
+  assert.equal(new Set(rotation.map((item) => item.id)).size, FIRE_ITEMS.length)
+  assert.equal(getDailyFireIndex(FIRE_ITEMS.length), getDailyFireIndex(0))
+
+  const methods = rotation.flatMap((item, index) => item.kind === 'method' ? [index] : [])
+  const nextCycle = methods[0] + rotation.length
+  const gaps = methods.map((index, i) => (methods[i + 1] ?? nextCycle) - index)
+  assert.ok(gaps.every((gap) => gap >= 2))
+  assert.ok(Math.max(...gaps) - Math.min(...gaps) <= 1)
 })
 
 test('v1 数据超过原正文、步骤、收藏、回收数量和文件大小限制时仍完整往返', () => {
