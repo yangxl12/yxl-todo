@@ -11,7 +11,8 @@ import {
   type FireItem,
   type FireMethod,
   type FireQuote,
-} from '../../lib/fireContent'
+} from './fireContent'
+import { useCalendarDay } from '../../lib/calendarDay'
 import { daysSinceEpoch } from '../../lib/date'
 import { useApp } from '../../lib/store'
 import { cx } from '../../lib/utils'
@@ -248,8 +249,10 @@ const QuoteCard = memo(function QuoteCard({ item, index }: { item: FireQuote; in
 
 export function FireView() {
   const { data } = useApp()
-  const dailyIndex = getDailyFireIndex(daysSinceEpoch())
-  const [heroIndex, setHeroIndex] = useState(dailyIndex)
+  const day = daysSinceEpoch(useCalendarDay())
+  const dailyIndex = getDailyFireIndex(day)
+  const [swapped, setSwapped] = useState<{ day: number; index: number } | null>(null)
+  const heroIndex = swapped?.day === day ? swapped.index : dailyIndex
   const [filter, setFilter] = useState<FireFilter>('all')
 
   const methods = useMemo(() => FIRE_ITEMS.filter((item): item is FireMethod => item.kind === 'method'), [])
@@ -280,7 +283,7 @@ export function FireView() {
   const nothingSaved = filter === 'saved' && savedTotal === 0
 
   const swap = () => {
-    setHeroIndex((current) => (current + 1) % FIRE_ITEMS.length)
+    setSwapped({ day, index: (heroIndex + 1) % FIRE_ITEMS.length })
   }
 
   return (

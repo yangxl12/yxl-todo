@@ -20,7 +20,7 @@
   box-shadow: var(--shadow-float);
   opacity: 0;
   transform: translateY(22px);
-  transition: opacity 200ms var(--ease-out), transform 200ms var(--ease-out);
+  transition: opacity var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out);
 }
 
 .modal[open] {
@@ -50,7 +50,14 @@
  */
 .modal.is-open::backdrop {
   background-color: var(--scrim);
-  animation: scrimIn 220ms var(--ease-out) both;
+  animation: scrimIn var(--dur-base) var(--ease-out) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modal.is-open::backdrop,
+  .modal.is-closing::backdrop {
+    animation: none;
+  }
 }
 
 @keyframes scrimIn {
@@ -65,7 +72,7 @@
 /* Leaving uses the same idea in reverse: the scrim follows the panel down
    instead of snapping the page back to daylight underneath it. */
 .modal.is-closing::backdrop {
-  animation: scrimOut 200ms var(--ease-out) both;
+  animation: scrimOut var(--dur-base) var(--ease-out) both;
 }
 
 @keyframes scrimOut {

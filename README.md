@@ -135,15 +135,32 @@ src/
   features/
     ideas/           念头、编辑器、AI 润色面板
     goals/           目标、任务、今天清单、编辑器
-    fire/            今日一焰、科学方法、燃句
+    fire/            今日一焰、科学方法、燃句与内容
     settings/        设置、数据备份、安装
   lib/
     deepseek.ts      DeepSeek Chat Completions / SSE / thinking / usage
-    fireContent.ts   经过人工核对与引用的火种内容
-    storage.ts       IndexedDB 持久化、备份校验与导入
-    store.tsx        应用状态与自动保存
+    dataFormat.ts    本地数据解码、旧格式兼容与导入修复
+    backup.ts        备份格式与导出
+    storage.ts       IndexedDB 修订提交与备用副本恢复
+    editJournal.ts   刷新或中断后的待保存编辑恢复
+    operations.ts    数据操作和撤回规则
+    store.tsx        应用状态与保存队列
   styles/            设计 token、布局、组件、页面与响应式样式
 ```
+
+## 回归检查
+
+```bash
+npm run typecheck
+npm test
+MSYS2_ENV_CONV_EXCL=BASE_PATH BASE_PATH=/yxl-todo/ npm run build
+npm run build:single
+python -m pip install -r scripts/browser-requirements.txt
+python -m playwright install chromium
+npm run test:browser
+```
+
+浏览器检查会启动本地服务，验证子路径 PWA 的离线与更新流程，并直接从文件打开便携版。AI 检查使用模拟响应。
 
 ## 关于「火种」的科学内容
 

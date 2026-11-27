@@ -9,7 +9,7 @@ import { useToast } from '../../components/Toast'
 import { IDEA_SORTS } from '../../lib/domains'
 import { useApp } from '../../lib/store'
 import { useTopbarSlot } from '../../lib/topbar'
-import { ideaTrashEntry, trashWouldOverflow } from '../../lib/trash'
+import { useTrashAction } from '../../lib/useTrashAction'
 import type { Idea, IdeaSort } from '../../lib/types'
 import { IdeaCard } from './IdeaCard'
 import { IdeaSheet } from './IdeaSheet'
@@ -37,7 +37,6 @@ function ideaSearchBlob(idea: Idea): string {
 
 export function IdeasView() {
   const { data, dispatch } = useApp()
-  const { showToast } = useToast()
   const topbarSlot = useTopbarSlot()
   const [query, setQuery] = useState('')
   const [searchOpen, setSearchOpen] = useState(false)
@@ -117,27 +116,18 @@ export function IdeasView() {
     setSheetOpen(true)
   }, [])
 
-  // Deleting asks nothing: the thought is kept in 最近删除, and the toast is
-  // the fast way back. That is one step fewer than a confirmation nobody reads.
-  // Kept referentially stable so memoized cards skip re-rendering with each key.
-  const deleteIdea = useCallback(
-    (idea: Idea) => {
-      const entry = ideaTrashEntry(idea)
-      const full = trashWouldOverflow(data.trash, entry)
-      dispatch({ type: 'idea/delete', id: idea.id })
-      dispatch({ type: 'trash/add', entry })
-      setSheetOpen(false)
-      if (full) {
-        showToast('最近删除满了，最旧的已被清掉，去设置里清一清', { duration: 6000 })
-        return
-      }
-      showToast('已放进最近删除', {
-        actionLabel: '撤回',
-        onAction: () => dispatch({ type: 'trash/restore', entryId: entry.id }),
-      })
-    },
-    [data.trash, dispatch, showToast],
-  )
+  const { showToast } = useToast()
+  const moveToTrash = useTrashAction()
+  const deleteIdea = useCallback(async (idea: Idea) => {
+    const error = await moveToTrash({ kind: 'idea', id: idea.id })
+    if (!error) setSheetOpen(false)
+    return error
+  }, [moveToTrash])
+
+  const deleteCard = useCallback(async (idea: Idea) => {
+    const error = await deleteIdea(idea)
+    if (error) showToast(error, { tone: 'error' })
+  }, [deleteIdea, showToast])
 
   const clearFilters = () => {
     setQuery('')
@@ -293,7 +283,7 @@ export function IdeasView() {
                   index={index}
                   isNew={idea.id === lastAddedId}
                   onOpen={openIdea}
-                  onDelete={deleteIdea}
+                  onDelete={deleteCard}
                 />
               ))}
             </div>

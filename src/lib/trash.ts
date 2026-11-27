@@ -1,5 +1,4 @@
-import type { Goal, Idea, Task, TrashEntry, TrashKind } from './types'
-import { newId } from './utils'
+import type { TrashEntry, TrashKind } from './types'
 
 /** Deleted things are only kept while they fit in this much space. */
 export const TRASH_LIMIT_BYTES = 5 * 1024 * 1024
@@ -23,41 +22,16 @@ export function textBytes(value: string): number {
   return bytes
 }
 
-function entryBytes(entry: TrashEntry): number {
-  return textBytes(JSON.stringify(entry))
-}
-
-function makeEntry(
-  kind: TrashKind,
-  deletedAt: number,
-  payload: Omit<TrashEntry, 'id' | 'kind' | 'deletedAt' | 'size'>,
-): TrashEntry {
-  const entry: TrashEntry = { id: newId(), kind, deletedAt, size: 0, ...payload }
-  entry.size = entryBytes(entry)
-  return entry
-}
-
-export function ideaTrashEntry(idea: Idea, now = Date.now()): TrashEntry {
-  return makeEntry('idea', now, { idea })
-}
-
-export function goalTrashEntry(goal: Goal, now = Date.now()): TrashEntry {
-  return makeEntry('goal', now, { goal })
-}
-
-export function taskTrashEntry(goal: Goal, task: Task, now = Date.now()): TrashEntry {
-  return makeEntry('task', now, { task: { goalId: goal.id, goalTitle: goal.title, task } })
+export function measureTrashEntry(entry: TrashEntry): number {
+  const bytes = textBytes(JSON.stringify({ ...entry, size: 0 }))
+  const estimate = bytes + String(bytes).length - 1
+  return bytes + String(estimate).length - 1
 }
 
 export function trashBytes(entries: TrashEntry[]): number {
   let total = 0
   for (const entry of entries) total += entry.size
   return total
-}
-
-/** True when accepting this entry would push the oldest ones out. */
-export function trashWouldOverflow(entries: TrashEntry[], incoming: TrashEntry): boolean {
-  return trashBytes(entries) + incoming.size > TRASH_LIMIT_BYTES
 }
 
 /**

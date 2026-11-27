@@ -1,3 +1,4 @@
+import { useCalendarDay } from '../../lib/calendarDay'
 import { useEffect, useState } from 'react'
 import { Button, IconButton } from '../../components/Button'
 import { ConfirmSheet } from '../../components/ConfirmSheet'
@@ -25,7 +26,8 @@ interface TrashSheetProps {
 type Notice = { tone: 'ok' | 'error'; text: string } | null
 
 export function TrashSheet({ open, onClose }: TrashSheetProps) {
-  const { data, dispatch } = useApp()
+  const today = useCalendarDay()
+  const { data, dispatch, flushSave, restoreRecord } = useApp()
   const [clearOpen, setClearOpen] = useState(false)
   const [notice, setNotice] = useState<Notice>(null)
   const entries = data.trash
@@ -49,13 +51,20 @@ export function TrashSheet({ open, onClose }: TrashSheetProps) {
     if (!open) setNotice(null)
   }, [open])
 
-  const restore = (entry: TrashEntry) => {
-    if (!canRestore(entry)) {
-      setNotice({ tone: 'error', text: '原目标已删除，这一步放不回去了' })
+  const restore = async (entry: TrashEntry) => {
+    const status = await restoreRecord(entry.id)
+    if (status === 'missing') return
+    if (status === 'restored') {
+      setNotice({ tone: 'ok', text: '已经放回去了' })
       return
     }
-    dispatch({ type: 'trash/restore', entryId: entry.id })
-    setNotice({ tone: 'ok', text: '已经放回去了' })
+    const messages = {
+      'parent-missing': '请先恢复原目标。',
+      duplicate: '已有同一条记录，原条目仍在最近删除中。',
+      busy: '正在保存，请稍后再试。',
+      failed: '恢复还未写入本地库。请重试保存。',
+    }
+    setNotice({ tone: 'error', text: messages[status] })
   }
 
   return (
@@ -108,7 +117,7 @@ export function TrashSheet({ open, onClose }: TrashSheetProps) {
                     </span>
                     <p className="trash-text">{trashTitle(entry)}</p>
                     <p className="trash-meta">
-                      {formatNoteTime(entry.deletedAt)} 删除
+                      {formatNoteTime(entry.deletedAt, today)} 删除
                       {trashNote(entry) ? ` · ${trashNote(entry)}` : ''}
                       {canRestore(entry) ? '' : ' · 原目标已不在'}
                     </p>
@@ -127,7 +136,11 @@ export function TrashSheet({ open, onClose }: TrashSheetProps) {
                       icon="trash"
                       size={15}
                       subtle
-                      onClick={() => dispatch({ type: 'trash/purge', entryId: entry.id })}
+                      onClick={async () => {
+                        if (dispatch({ type: 'trash/purge', entryId: entry.id }) && !(await flushSave())) {
+                          setNotice({ tone: 'error', text: '彻底删除还未写入本地库。' })
+                        }
+                      }}
                     />
                   </div>
                 </li>
@@ -147,8 +160,12 @@ export function TrashSheet({ open, onClose }: TrashSheetProps) {
       <ConfirmSheet
         open={clearOpen}
         onClose={() => setClearOpen(false)}
-        onConfirm={() => {
+        onConfirm={async () => {
           dispatch({ type: 'trash/clear' })
+          if (!(await flushSave())) {
+            setNotice({ tone: 'error', text: '清空最近删除还未写入本地库。' })
+            return
+          }
           setNotice({ tone: 'ok', text: '最近删除已清空' })
         }}
         title="要把这些都彻底删掉吗？"

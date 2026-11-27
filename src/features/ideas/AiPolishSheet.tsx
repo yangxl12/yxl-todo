@@ -1,27 +1,23 @@
 import { useEffect, useRef, useState } from 'react'
-import {
-  DeepSeekError as DeepSeekRequestError,
-  polishText,
-  type PolishMode,
-  type PolishStyle,
-  type TokenUsage,
-} from '../../lib/deepseek'
+import type { DeepSeekError, TokenUsage } from '../../lib/deepseek'
+import type { PolishMode, PolishStyle } from '../../lib/polishPrompts'
+import { DEEPSEEK_MODELS } from '../../lib/models'
+import { usePolishRun } from './usePolishRun'
 import { useApp } from '../../lib/store'
 import { Button, IconButton } from '../../components/Button'
 import { Sheet } from '../../components/Modal'
 import { Icon } from '../../components/Icon'
 import { writeClipboard } from '../../lib/clipboard'
-import { cx, cleanAiText, formatNumber } from '../../lib/utils'
+import { cx, formatNumber } from '../../lib/utils'
 
 interface AiPolishSheetProps {
   open: boolean
   onClose: () => void
+  onAfterClose: () => void
   sourceText: string
   onApply: (text: string) => void
   contextLabel?: string
 }
-
-type RunState = 'idle' | 'running' | 'done' | 'stopped' | 'error'
 
 const MODES: Array<{ value: PolishMode; label: string; hint: string }> = [
   { value: 'clear', label: '理顺', hint: '顺句子，留原声' },
@@ -56,6 +52,7 @@ function usageLine(usage: TokenUsage | null): string | null {
 export function AiPolishSheet({
   open,
   onClose,
+  onAfterClose,
   sourceText,
   onApply,
   contextLabel = '正在润色这则念头',
@@ -64,91 +61,37 @@ export function AiPolishSheet({
   const [mode, setMode] = useState<PolishMode>('literary')
   const [style, setStyle] = useState<PolishStyle>('cold')
   const [thinking, setThinking] = useState(true)
-  const [runState, setRunState] = useState<RunState>('idle')
-  const [content, setContent] = useState('')
-  const [reasoning, setReasoning] = useState('')
-  const [usage, setUsage] = useState<TokenUsage | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [finishReason, setFinishReason] = useState<string | null>(null)
+  const { output, start: run, stop, cancel } = usePolishRun(open)
+  const { state: runState, content, reasoning, usage } = output
+  const [localError, setError] = useState<string | null>(null)
+  const [dismissedError, setDismissedError] = useState<DeepSeekError | null>(null)
   const [keyDraft, setKeyDraft] = useState('')
   const [keyEditing, setKeyEditing] = useState(false)
   const [showKey, setShowKey] = useState(false)
   const [showReasoning, setShowReasoning] = useState(false)
   const [copied, setCopied] = useState(false)
   const [showOriginal, setShowOriginal] = useState(false)
-  const [errorKind, setErrorKind] = useState<DeepSeekRequestError['kind'] | null>(null)
-  const abortRef = useRef<AbortController | null>(null)
   const outputRef = useRef<HTMLDivElement>(null)
-  const wasOpen = useRef(false)
-  const pendingContent = useRef('')
-  const pendingReasoning = useRef('')
-  const streamTimer = useRef<number | null>(null)
-
-  const clearStreamTimer = () => {
-    if (streamTimer.current !== null) {
-      window.clearTimeout(streamTimer.current)
-      streamTimer.current = null
-    }
-  }
-
-  // Tokens arrive faster than a screen refresh; repainting at ~20fps keeps the
-  // text flowing without a state update for every chunk.
-  const scheduleTextFlush = () => {
-    if (streamTimer.current !== null) return
-    streamTimer.current = window.setTimeout(() => {
-      streamTimer.current = null
-      setContent(pendingContent.current)
-      setReasoning(pendingReasoning.current)
-    }, 50)
-  }
-
-  const flushPendingText = () => {
-    clearStreamTimer()
-    setContent(pendingContent.current)
-    setReasoning(pendingReasoning.current)
-  }
-
+  const requestError = output.error !== dismissedError ? output.error : null
+  const error = localError ?? requestError?.message
+  const errorKind = requestError?.kind
   const apiKey = data.prefs.apiKey
   const hasKey = Boolean(apiKey)
 
   useEffect(() => {
-    if (open && !wasOpen.current) {
-      clearStreamTimer()
-      pendingContent.current = ''
-      pendingReasoning.current = ''
-      setMode('literary')
-      setStyle('cold')
-      setThinking(true)
-      setRunState('idle')
-      setContent('')
-      setReasoning('')
-      setUsage(null)
-      setError(null)
-      setFinishReason(null)
-      setKeyDraft('')
-      setKeyEditing(false)
-      setErrorKind(null)
-      setShowReasoning(false)
-      setCopied(false)
-      setShowOriginal(false)
-    }
-    wasOpen.current = open
+    if (!open) return
+    setMode('literary')
+    setStyle('cold')
+    setThinking(true)
+    setKeyDraft('')
+    setKeyEditing(false)
+    setShowKey(false)
+    setShowReasoning(false)
+    setCopied(false)
+    setShowOriginal(false)
+    setError(null)
+    setDismissedError(null)
   }, [open])
-
-  useEffect(() => {
-    if (!open) {
-      abortRef.current?.abort()
-      abortRef.current = null
-    }
-  }, [open])
-
-  useEffect(
-    () => () => {
-      abortRef.current?.abort()
-      clearStreamTimer()
-    },
-    [],
-  )
 
   useEffect(() => {
     if (runState !== 'running') return
@@ -158,94 +101,22 @@ export function AiPolishSheet({
     if (nearBottom) node.scrollTop = node.scrollHeight
   }, [content, runState])
 
-  const start = async (keyOverride?: string) => {
-    const useDraft = keyEditing || !hasKey
-    const key = (keyOverride ?? (useDraft ? keyDraft : apiKey)).trim()
-    if (!key) {
-      setError('先填入 DeepSeek API Key，密钥只会留在这台设备。')
-      setErrorKind('auth')
-      return
-    }
-    if (!sourceText.trim()) {
-      setError('这则念头还是空的，先写一点再润色。')
-      return
-    }
-
-    if (key !== apiKey) {
-      dispatch({ type: 'prefs/update', patch: { apiKey: key } })
-    }
-    if (keyEditing) setKeyEditing(false)
-
-    abortRef.current?.abort()
-    const controller = new AbortController()
-    abortRef.current = controller
-    clearStreamTimer()
-    pendingContent.current = ''
-    pendingReasoning.current = ''
-    setRunState('running')
-    setContent('')
-    setReasoning('')
-    setUsage(null)
+  const start = () => {
+    const key = (keyEditing || !hasKey ? keyDraft : apiKey).trim()
+    if (!key || !sourceText.trim()) return
+    if (key !== apiKey) dispatch({ type: 'prefs/update', patch: { apiKey: key } })
+    setKeyEditing(false)
     setError(null)
-    setErrorKind(null)
-    setFinishReason(null)
+    setDismissedError(null)
     setCopied(false)
     setShowReasoning(false)
-
-    try {
-      const result = await polishText({
-        apiKey: key,
-        model: data.prefs.model,
-        mode,
-        style,
-        text: sourceText,
-        thinking,
-        signal: controller.signal,
-        onContent: (full) => {
-          pendingContent.current = full
-          scheduleTextFlush()
-        },
-        onReasoning: (full) => {
-          pendingReasoning.current = full
-          scheduleTextFlush()
-        },
-        onUsage: (next) => setUsage(next),
-      })
-      abortRef.current = null
-      clearStreamTimer()
-      setContent(result.text)
-      setReasoning(result.reasoning)
-      setFinishReason(result.finishReason)
-      setRunState('done')
-    } catch (caught) {
-      abortRef.current = null
-      flushPendingText()
-      if (controller.signal.aborted) {
-        setRunState((current) => (current === 'running' ? 'stopped' : current))
-        return
-      }
-      if (caught instanceof DeepSeekRequestError) {
-        setError(caught.message)
-        setErrorKind(caught.kind)
-      } else {
-        setError('这次没有润色成功，请稍后再试。')
-        setErrorKind('request')
-      }
-      setRunState('error')
-    }
+    void run({ apiKey: key, model: data.prefs.model, mode, style, text: sourceText, thinking })
   }
 
-  const stop = () => {
-    abortRef.current?.abort()
-    abortRef.current = null
-    flushPendingText()
-    setRunState((current) => (current === 'running' ? 'stopped' : current))
-  }
-
+  const canReplace = runState === 'done' && output.source === sourceText
   const handleApply = () => {
-    const cleaned = cleanAiText(content)
-    if (!cleaned) return
-    onApply(cleaned)
+    if (!canReplace || !content) return
+    onApply(content)
     onClose()
   }
 
@@ -265,9 +136,10 @@ export function AiPolishSheet({
     <Sheet
       open={open}
       onClose={() => {
-        abortRef.current?.abort()
+        cancel()
         onClose()
       }}
+      onAfterClose={onAfterClose}
       title="让文字更靠近你"
       subtitle={contextLabel}
       titleId="ai-polish-title"
@@ -275,7 +147,7 @@ export function AiPolishSheet({
       bodyClassName="ai-sheet-body"
       closeOnBackdrop={runState !== 'running'}
       footer={
-        runState === 'done' ? (
+        canReplace ? (
           <>
             <Button variant="ghost" icon="refresh" onClick={() => start()} disabled={!canRun}>
               再来一版
@@ -344,7 +216,7 @@ export function AiPolishSheet({
               value={keyDraft}
               onChange={(event) => {
                 setKeyDraft(event.target.value)
-                if (errorKind === 'auth') setError(null)
+                if (errorKind === 'auth') setDismissedError(requestError)
               }}
               onKeyDown={(event) => {
                 if (event.key === 'Enter' && keyDraft.trim()) {
@@ -380,7 +252,7 @@ export function AiPolishSheet({
                 onClick={() => {
                   setKeyEditing(false)
                   setKeyDraft('')
-                  setError(null)
+                  setDismissedError(requestError)
                 }}
               >
                 取消更换
@@ -446,7 +318,7 @@ export function AiPolishSheet({
           </span>
         </label>
         <p className="model-hint">
-          {data.prefs.model === 'deepseek-flash' ? 'DeepSeek Flash' : 'DeepSeek V4 Pro'}
+          DeepSeek {DEEPSEEK_MODELS.find((model) => model.value === data.prefs.model)?.name}
           {thinking ? ' · 思考模式' : ' · 快速模式'} · 可在设置中切换
           {hasKey && !editingKey ? (
             <button
@@ -512,15 +384,15 @@ export function AiPolishSheet({
             {runState === 'running' && content ? <span className="typing-caret" aria-hidden="true" /> : null}
           </div>
 
-          {runState === 'done' && finishReason === 'length' ? (
+          {runState === 'truncated' ? (
             <p className="inline-note">
-              这次可能没有写完整。可以再来一版，或把长念头分两段润色。
+              只收到部分文字。可以复制片段，或重新润色。
             </p>
           ) : null}
 
-          {runState === 'done' || runState === 'stopped' ? (
+          {runState !== 'running' && content ? (
             <div className="ai-result-meta">
-              <span>{usageLine(usage) ?? 'DeepSeek 已完成这次润色'}</span>
+              <span>{usageLine(usage) ?? (runState === 'done' ? 'DeepSeek 已完成这次润色' : '润色片段')}</span>
               {content ? (
                 <button type="button" className="text-action" onClick={handleCopy}>
                   <Icon name="copy" size={14} />
@@ -544,7 +416,7 @@ export function AiPolishSheet({
                 onClick={() => {
                   setKeyEditing(true)
                   setKeyDraft('')
-                  setError(null)
+                  setDismissedError(requestError)
                 }}
               >
                 更换密钥

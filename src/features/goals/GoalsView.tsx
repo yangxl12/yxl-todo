@@ -1,3 +1,4 @@
+import { useCalendarDay } from '../../lib/calendarDay'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Button } from '../../components/Button'
@@ -9,18 +10,18 @@ import { useToast } from '../../components/Toast'
 import { DOMAINS, GOAL_SORTS } from '../../lib/domains'
 import { useApp } from '../../lib/store'
 import { useTopbarSlot } from '../../lib/topbar'
-import { goalTrashEntry, taskTrashEntry, trashWouldOverflow } from '../../lib/trash'
-import { newId } from '../../lib/storage'
+import { useTrashAction } from '../../lib/useTrashAction'
+import { newId } from '../../lib/utils'
 import type { DomainKey, Goal, GoalSort, Task } from '../../lib/types'
 import { getDueTone } from '../../lib/date'
 import { GoalCard } from './GoalCard'
 import { GoalEditorSheet } from './GoalEditorSheet'
 import { TaskEditorSheet } from './TaskEditorSheet'
-import { getTodayEntries, goalStats, latestCompletion, type GoalStats } from './taskUtils'
+import { getTodayEntries, groupGoals } from './taskUtils'
 import { cx } from '../../lib/utils'
 
-type GoalEditorState = { mode: 'create' } | { mode: 'edit'; goalId: string } | null
-type TaskEditorState = { goalId: string; taskId: string } | null
+type GoalEditorState = { mode: 'create' } | { mode: 'edit'; goal: Goal } | null
+type TaskEditorState = { goal: Goal; task: Task } | null
 
 // Same rhythm as the thoughts list: render a first screenful, let the rest
 // arrive on request instead of mounting every goal card up front.
@@ -29,32 +30,9 @@ const PAGE_SIZE = 30
 // items stays one tap away instead of being mounted every time.
 const TODAY_LIMIT = 20
 
-function sortActiveGoals(
-  goals: Goal[],
-  sort: GoalSort,
-  stats: Map<string, GoalStats>,
-): Goal[] {
-  const progressOf = (goal: Goal) => stats.get(goal.id)?.progress ?? 0
-  return [...goals].sort((a, b) => {
-    if (sort === 'due') {
-      if (a.dueDate !== b.dueDate) {
-        if (!a.dueDate) return 1
-        if (!b.dueDate) return -1
-        return a.dueDate.localeCompare(b.dueDate)
-      }
-      return b.createdAt - a.createdAt
-    }
-    if (sort === 'progress') {
-      const diff = progressOf(b) - progressOf(a)
-      if (diff !== 0) return diff
-      return b.createdAt - a.createdAt
-    }
-    return b.createdAt - a.createdAt
-  })
-}
-
 export function GoalsView() {
-  const { data, dispatch } = useApp()
+  const today = useCalendarDay()
+  const { data, dispatch, getData } = useApp()
   const { showToast } = useToast()
   const topbarSlot = useTopbarSlot()
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
@@ -71,36 +49,11 @@ export function GoalsView() {
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
   const [todayOpen, setTodayOpen] = useState(false)
   const didAutoExpand = useRef(false)
-  // Stable callbacks below read the freshest data through this ref, so memoized
-  // cards keep their identity while store updates still reach the handler.
-  const dataRef = useRef(data)
-  dataRef.current = data
 
-  const goalBuckets = useMemo(() => {
-    const stats = new Map<string, GoalStats>()
-    const active: Goal[] = []
-    const completed: Goal[] = []
-    for (const goal of data.goals) {
-      const entry = goalStats(goal)
-      stats.set(goal.id, entry)
-      if (entry.complete) completed.push(goal)
-      else active.push(goal)
-    }
-    return { active, completed, stats }
-  }, [data.goals])
-
-  const activeGoals = goalBuckets.active
-  const completedGoals = goalBuckets.completed
-
-  const sortedActive = useMemo(
-    () => sortActiveGoals(activeGoals, data.prefs.goalSort, goalBuckets.stats),
-    [activeGoals, data.prefs.goalSort, goalBuckets.stats],
+  const { active: sortedActive, completed: sortedCompleted } = useMemo(
+    () => groupGoals(data.goals, data.prefs.goalSort),
+    [data.goals, data.prefs.goalSort],
   )
-  const sortedCompleted = useMemo(() => {
-    const latest = new Map<string, number>()
-    for (const goal of completedGoals) latest.set(goal.id, latestCompletion(goal))
-    return [...completedGoals].sort((a, b) => (latest.get(b.id) ?? 0) - (latest.get(a.id) ?? 0))
-  }, [completedGoals])
 
   const visibleActive = useMemo(
     () => (domainFilter ? sortedActive.filter((goal) => goal.domain === domainFilter) : sortedActive),
@@ -120,7 +73,7 @@ export function GoalsView() {
     [visibleCompleted, visibleCount],
   )
 
-  const todayEntries = useMemo(() => getTodayEntries(data.goals), [data.goals])
+  const todayEntries = useMemo(() => getTodayEntries(data.goals, today), [data.goals, today])
   const todayCount = todayEntries.length
   const shownToday = useMemo(
     () => (todayOpen ? todayEntries : todayEntries.slice(0, TODAY_LIMIT)),
@@ -156,12 +109,12 @@ export function GoalsView() {
 
   const editGoalObject =
     goalEditor?.mode === 'edit'
-      ? (data.goals.find((goal) => goal.id === goalEditor.goalId) ?? null)
+      ? (data.goals.find((goal) => goal.id === goalEditor.goal.id) ?? goalEditor.goal)
       : null
   const taskGoal = taskEditor
-    ? (data.goals.find((goal) => goal.id === taskEditor.goalId) ?? null)
+    ? (data.goals.find((goal) => goal.id === taskEditor.goal.id) ?? taskEditor.goal)
     : null
-  const taskObject = taskGoal?.tasks.find((task) => task.id === taskEditor?.taskId) ?? null
+  const taskObject = taskGoal?.tasks.find((task) => task.id === taskEditor?.task.id) ?? taskEditor?.task ?? null
 
   const toggleExpanded = useCallback((goalId: string) => {
     setExpandedIds((current) => {
@@ -184,38 +137,40 @@ export function GoalsView() {
   }
 
   const openEditGoal = useCallback((goal: Goal) => {
-    setGoalEditor({ mode: 'edit', goalId: goal.id })
+    setGoalEditor({ mode: 'edit', goal })
     setGoalEditorSession((session) => session + 1)
     setGoalEditorOpen(true)
   }, [])
 
   const openTaskEditor = useCallback((goalId: string, task: Task) => {
-    setTaskEditor({ goalId, taskId: task.id })
+    const goal = getData().goals.find((item) => item.id === goalId)
+    if (!goal) return
+    setTaskEditor({ goal, task })
     setTaskEditorSession((session) => session + 1)
     setTaskEditorOpen(true)
-  }, [])
+  }, [getData])
 
   const toggleTask = useCallback(
     (goalId: string, taskId: string) => {
-      const goal = dataRef.current.goals.find((entry) => entry.id === goalId)
+      const goal = getData().goals.find((entry) => entry.id === goalId)
       const task = goal?.tasks.find((entry) => entry.id === taskId)
       if (!goal || !task) return
-      const now = Date.now()
+      const completionId = newId()
       const completing = !task.done
       const willComplete =
         completing &&
         goal.tasks.length > 0 &&
         goal.tasks.every((entry) => (entry.id === taskId ? true : entry.done))
-      dispatch({ type: 'task/toggle', goalId, taskId, now })
+      if (!dispatch({ type: 'task/toggle', goalId, taskId, completionId })) return
       if (completing) {
         showToast(willComplete ? `「${goal.title}」走完了` : '完成了一步', {
           actionLabel: '撤回',
           duration: willComplete ? 6500 : 4200,
-          onAction: () => dispatch({ type: 'task/toggle', goalId, taskId, now: Date.now() }),
+          onAction: () => dispatch({ type: 'task/undoComplete', goalId, taskId, completionId }),
         })
       }
     },
-    [dispatch, showToast],
+    [dispatch, getData, showToast],
   )
 
   const addTask = useCallback(
@@ -277,36 +232,17 @@ export function GoalsView() {
     setGoalEditorOpen(false)
   }
 
-  const deleteGoal = (goal: Goal) => {
-    const entry = goalTrashEntry(goal)
-    const full = trashWouldOverflow(data.trash, entry)
-    setGoalEditorOpen(false)
-    dispatch({ type: 'goal/delete', id: goal.id })
-    dispatch({ type: 'trash/add', entry })
-    if (full) {
-      showToast('最近删除满了，最旧的已被清掉，去设置里清一清', { duration: 6000 })
-      return
-    }
-    showToast(`「${goal.title}」已放进最近删除`, {
-      actionLabel: '撤回',
-      onAction: () => dispatch({ type: 'trash/restore', entryId: entry.id }),
-    })
+  const moveToTrash = useTrashAction()
+  const deleteGoal = async (goal: Goal) => {
+    const error = await moveToTrash({ kind: 'goal', id: goal.id })
+    if (!error) setGoalEditorOpen(false)
+    return error
   }
 
-  const deleteTask = (goal: Goal, task: Task) => {
-    const entry = taskTrashEntry(goal, task)
-    const full = trashWouldOverflow(data.trash, entry)
-    setTaskEditorOpen(false)
-    dispatch({ type: 'task/delete', goalId: goal.id, taskId: task.id })
-    dispatch({ type: 'trash/add', entry })
-    if (full) {
-      showToast('最近删除满了，最旧的已被清掉，去设置里清一清', { duration: 6000 })
-      return
-    }
-    showToast(`「${task.title}」已放进最近删除`, {
-      actionLabel: '撤回',
-      onAction: () => dispatch({ type: 'trash/restore', entryId: entry.id }),
-    })
+  const deleteTask = async (goal: Goal, task: Task) => {
+    const error = await moveToTrash({ kind: 'task', goalId: goal.id, id: task.id })
+    if (!error) setTaskEditorOpen(false)
+    return error
   }
 
   const renderGoal = (goal: Goal) => (
@@ -323,7 +259,7 @@ export function GoalsView() {
   )
 
   const emptyAfterFilter = data.goals.length > 0 && visibleActive.length === 0 && visibleCompleted.length === 0
-  const allCompleted = activeGoals.length === 0 && completedGoals.length > 0
+  const allCompleted = sortedActive.length === 0 && sortedCompleted.length > 0
 
   return (
     <div className="goals-view">
@@ -343,7 +279,7 @@ export function GoalsView() {
           </div>
           <ul className="today-list">
             {shownToday.map(({ goal, task }) => {
-              const tone = getDueTone(task.dueDate)
+              const tone = getDueTone(task.dueDate, task.done, today)
               return (
                 <li key={`${goal.id}-${task.id}`} className="today-task">
                   <button

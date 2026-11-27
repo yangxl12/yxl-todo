@@ -1,3 +1,4 @@
+import { useCalendarDay } from '../../lib/calendarDay'
 import { memo, useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { Button, IconButton } from '../../components/Button'
 import { Icon } from '../../components/Icon'
@@ -27,7 +28,8 @@ interface TaskRowProps {
 }
 
 const TaskRow = memo(function TaskRow({ task, goalTitle, onToggle, onEdit }: TaskRowProps) {
-  const tone = getDueTone(task.dueDate, task.done)
+  const today = useCalendarDay()
+  const tone = getDueTone(task.dueDate, task.done, today)
 
   return (
     <li className={cx('task-row', task.done && 'is-done')}>
@@ -55,7 +57,7 @@ const TaskRow = memo(function TaskRow({ task, goalTitle, onToggle, onEdit }: Tas
             {task.dueDate ? (
               <span className={cx('task-due', tone && `due-${tone}`)}>
                 <Icon name="calendar" size={12} />
-                {formatDueDate(task.dueDate)}
+                {formatDueDate(task.dueDate, today)}
               </span>
             ) : null}
             {task.priority !== 'normal' ? (
@@ -103,7 +105,8 @@ export const GoalCard = memo(function GoalCard({
   const orderedTasks = expanded ? orderTasks(goal.tasks) : EMPTY_TASKS
 
   const domain = DOMAIN_MAP[goal.domain]
-  const tone = getDueTone(goal.dueDate, complete)
+  const today = useCalendarDay()
+  const tone = getDueTone(goal.dueDate, complete, today)
   const tasksId = `goal-tasks-${goal.id}`
   const percent = Math.round(progress * 100)
 
@@ -183,7 +186,7 @@ export const GoalCard = memo(function GoalCard({
           {goal.dueDate ? (
             <span className={cx('goal-due', tone && `due-${tone}`)}>
               <Icon name="calendar" size={12} />
-              {formatDueDate(goal.dueDate)}
+              {formatDueDate(goal.dueDate, today)}
             </span>
           ) : null}
           {complete ? (

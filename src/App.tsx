@@ -4,16 +4,19 @@ import { Brand } from './components/Brand'
 import { IconButton } from './components/Button'
 import { Icon } from './components/Icon'
 import { BottomNav, SideRail } from './components/Navigation'
-import { ToastProvider } from './components/Toast'
+import { StorageNotice, StorageRecovery } from './components/StorageStatus'
+import { ToastProvider, useToast } from './components/Toast'
 import { useApp } from './lib/store'
 import { useHashRoute } from './lib/useHashRoute'
 import { useTheme } from './lib/useTheme'
-import { formatFullDate } from './lib/date'
+import { CalendarDayProvider, useCalendarDay } from './lib/calendarDay'
+import { daysSinceEpoch, formatFullDate } from './lib/date'
 import { InstallProvider } from './lib/useInstallPrompt'
 import { TopbarSlotProvider } from './lib/topbar'
 import { cx } from './lib/utils'
 import { IdeasView } from './features/ideas/IdeasView'
 import { GoalsView } from './features/goals/GoalsView'
+import { FIRE_ITEMS, getDailyFireIndex } from './features/fire/fireContent'
 import { FireView } from './features/fire/FireView'
 import { SettingsSheet } from './features/settings/SettingsSheet'
 
@@ -28,7 +31,8 @@ function BootScreen() {
 }
 
 function AppContent() {
-  const { data, dispatch, ready, saveFailed, flushSave } = useApp()
+  const { data, dispatch, ready, problem, flushSave } = useApp()
+  const today = useCalendarDay()
   const { tab, navigate } = useHashRoute()
   const { resolvedDark } = useTheme(data.prefs.theme)
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -48,18 +52,33 @@ function AppContent() {
     window.scrollTo(0, 0)
   }, [tab])
 
-  if (!ready) return <BootScreen />
+  const [dataEpoch, setDataEpoch] = useState(0)
+  const { dismissToast } = useToast()
+  useEffect(() => {
+    const reset = () => {
+      dismissToast()
+      setDataEpoch((epoch) => epoch + 1)
+    }
+    window.addEventListener('shiyan:data-changed', reset)
+    return () => window.removeEventListener('shiyan:data-changed', reset)
+  }, [dismissToast])
 
+  if (!ready) return problem ? <StorageRecovery /> : <BootScreen />
+
+  const daily = FIRE_ITEMS[getDailyFireIndex(daysSinceEpoch(today))]
   const nextTheme = resolvedDark ? 'light' : 'dark'
 
   return (
     <TopbarSlotProvider host={actionsHost}>
-      <a className="skip-link" href="#main-content">
+      <a className="skip-link" href="#main-content" onClick={(event) => {
+        event.preventDefault()
+        document.getElementById('main-content')?.focus()
+      }}>
         跳到主要内容
       </a>
 
       <div className="app-frame">
-        <SideRail active={tab} onNavigate={navigate} />
+        <SideRail active={tab} onNavigate={navigate} dailyFragment={daily.kind === 'quote' ? daily.body : daily.title} />
         <div className="app-column">
           <header className="topbar">
             <div className="topbar-left">
@@ -67,7 +86,7 @@ function AppContent() {
                 <Brand />
               </div>
               <div className="topbar-context">
-                <span className="topbar-date">{formatFullDate()}</span>
+                <span className="topbar-date">{formatFullDate(today)}</span>
                 <span className="local-chip">
                   <Icon name="lock" size={12} />
                   仅此设备
@@ -91,18 +110,10 @@ function AppContent() {
             </div>
           </header>
 
-          {saveFailed ? (
-            <div className="save-warning" role="alert">
-              <Icon name="alert" size={16} />
-              <span>本地存储没能写入，最近的改动可能还没保存。建议先导出备份。</span>
-              <button type="button" onClick={flushSave}>
-                重试保存
-              </button>
-            </div>
-          ) : null}
+          <StorageNotice />
 
-          <main className="main-content" id="main-content">
-            <div className={cx('page-container', `page-${tab}`)} key={tab}>
+          <main className="main-content" id="main-content" tabIndex={-1}>
+            <div className={cx('page-container', `page-${tab}`)} key={`${tab}-${dataEpoch}`}>
               {tab === 'ideas' ? <IdeasView /> : null}
               {tab === 'goals' ? <GoalsView /> : null}
               {tab === 'fire' ? <FireView /> : null}
@@ -117,7 +128,7 @@ function AppContent() {
       {needRefresh ? (
         <div className="update-banner" role="status">
           <span>新版本的拾焰已经备好。</span>
-          <button type="button" onClick={() => void updateServiceWorker(true)}>
+          <button type="button" onClick={async () => { if (await flushSave()) await updateServiceWorker(true) }}>
             更新
           </button>
         </div>
@@ -130,7 +141,9 @@ export default function App() {
   return (
     <InstallProvider>
       <ToastProvider>
-        <AppContent />
+        <CalendarDayProvider>
+          <AppContent />
+        </CalendarDayProvider>
       </ToastProvider>
     </InstallProvider>
   )

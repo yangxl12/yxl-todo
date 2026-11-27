@@ -1,6 +1,6 @@
 import { useMemo, useState, type KeyboardEvent } from 'react'
 import { Icon } from './Icon'
-import { normalizeTags } from '../lib/storage'
+import { normalizeTags } from '../lib/tags'
 import { cx } from '../lib/utils'
 
 interface TagEditorProps {

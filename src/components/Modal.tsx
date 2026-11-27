@@ -76,6 +76,7 @@ function useKeyboardInset(active: boolean, dialogRef: RefObject<HTMLDialogElemen
 interface ModalProps {
   open: boolean
   onClose: () => void
+  onAfterClose?: () => void
   labelledBy: string
   children: ReactNode
   panelClassName?: string
@@ -87,6 +88,7 @@ interface ModalProps {
 export function Modal({
   open,
   onClose,
+  onAfterClose,
   labelledBy,
   children,
   panelClassName,
@@ -94,11 +96,22 @@ export function Modal({
   initialFocusRef,
 }: ModalProps) {
   const dialogRef = useRef<HTMLDialogElement>(null)
+  const scrollLocked = useRef(false)
+  const afterClose = useRef(onAfterClose)
+  afterClose.current = onAfterClose
   const closeTimer = useRef<number | null>(null)
   // `rendered` outlives `open` only for the closing animation.
   const [rendered, setRendered] = useState(open)
   const [visible, setVisible] = useState(false)
   const show = open || rendered
+
+  const closeDialog = (dialog: HTMLDialogElement | null) => {
+    if (dialog?.open) dialog.close()
+    if (scrollLocked.current) {
+      scrollLocked.current = false
+      unlockPageScroll()
+    }
+  }
 
   useEffect(() => {
     if (open) {
@@ -108,6 +121,10 @@ export function Modal({
       }
       // Keeps the closing pass from unmounting while we reopen it.
       setRendered(true)
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        setVisible(true)
+        return
+      }
       // The dialog has to be painted once in its closed state before the
       // open class lands; a single frame can still be folded into the same
       // style pass, which makes the sheet appear instead of rise.
@@ -123,11 +140,20 @@ export function Modal({
 
     if (!rendered) return
     setVisible(false)
-    closeTimer.current = window.setTimeout(() => {
-      dialogRef.current?.close()
+    const dialog = dialogRef.current
+    const close = () => {
+      closeDialog(dialog)
       setRendered(false)
       closeTimer.current = null
-    }, 210)
+      afterClose.current?.()
+    }
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches || !dialog) {
+      close()
+      return
+    }
+    const duration = getComputedStyle(dialog).transitionDuration.split(',')[0].trim()
+    const milliseconds = parseFloat(duration) * (duration.endsWith('ms') ? 1 : 1000)
+    closeTimer.current = window.setTimeout(close, milliseconds)
 
     return () => {
       if (closeTimer.current !== null) {
@@ -147,11 +173,9 @@ export function Modal({
     if (!dialog.open) {
       dialog.showModal()
       lockPageScroll()
+      scrollLocked.current = true
     }
-    return () => {
-      if (dialog.open) dialog.close()
-      unlockPageScroll()
-    }
+    return () => closeDialog(dialog)
   }, [show])
 
   useKeyboardInset(show, dialogRef)
@@ -189,7 +213,8 @@ export function Modal({
       aria-labelledby={labelledBy}
       onCancel={(event) => {
         event.preventDefault()
-        onClose()
+        event.stopPropagation()
+        if (open) onClose()
       }}
       onClick={(event) => {
         if (closeOnBackdrop && event.target === event.currentTarget) onClose()
@@ -204,6 +229,7 @@ export function Modal({
 interface SheetProps {
   open: boolean
   onClose: () => void
+  onAfterClose?: () => void
   title: ReactNode
   subtitle?: ReactNode
   /** Replaces the title block while keeping the close button on the right. */
@@ -221,6 +247,7 @@ interface SheetProps {
 export function Sheet({
   open,
   onClose,
+  onAfterClose,
   title,
   subtitle,
   headContent,
@@ -237,6 +264,7 @@ export function Sheet({
     <Modal
       open={open}
       onClose={onClose}
+      onAfterClose={onAfterClose}
       labelledBy={titleId}
       panelClassName={cx('sheet-panel', panelClassName)}
       closeOnBackdrop={closeOnBackdrop}

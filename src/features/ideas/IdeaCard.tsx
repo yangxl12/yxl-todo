@@ -1,3 +1,4 @@
+import { useCalendarDay } from '../../lib/calendarDay'
 import { memo } from 'react'
 import { Icon } from '../../components/Icon'
 import type { Idea } from '../../lib/types'
@@ -21,6 +22,7 @@ export const IdeaCard = memo(function IdeaCard({
 }: IdeaCardProps) {
   const edited = idea.updatedAt - idea.createdAt > 60_000
 
+  const today = useCalendarDay()
   return (
     <article className={cx('idea-card', idea.pinned && 'is-pinned', isNew && 'is-new')}>
       <div className="idea-card-top">
@@ -33,7 +35,7 @@ export const IdeaCard = memo(function IdeaCard({
             </span>
           ) : null}
           <time dateTime={new Date(idea.createdAt).toISOString()}>
-            {formatNoteTime(idea.createdAt)}
+            {formatNoteTime(idea.createdAt, today)}
           </time>
           {edited ? <span className="edited-mark">改过</span> : null}
         </span>

@@ -12,17 +12,13 @@ import { Sheet } from '../../components/Modal'
 import { TagEditor } from '../../components/TagEditor'
 import { useToast } from '../../components/Toast'
 import { formatRecordTime } from '../../lib/date'
-import { clearDraft, loadDraft, newId, saveDraft } from '../../lib/storage'
+import { clearDraft, loadDraft, saveDraft } from '../../lib/draft'
 import { useApp } from '../../lib/store'
 import type { Idea } from '../../lib/types'
-import { cx, isMac } from '../../lib/utils'
+import { cx, isMac, newId } from '../../lib/utils'
 import { AiPolishSheet } from './AiPolishSheet'
 
 export type IdeaSheetMode = 'create' | 'edit'
-
-// Long enough that continuous typing stays local, short enough that a pause
-// still lands the text in the store (and the local backup) on its own.
-const AUTOSAVE_MS = 700
 
 interface IdeaSheetProps {
   open: boolean
@@ -32,7 +28,7 @@ interface IdeaSheetProps {
   onClose: () => void
   onCreated: (id: string) => void
   onReopen: () => void
-  onRequestDelete: (idea: Idea) => void
+  onRequestDelete: (idea: Idea) => Promise<string | null>
 }
 
 /**
@@ -50,7 +46,7 @@ export function IdeaSheet({
   onReopen,
   onRequestDelete,
 }: IdeaSheetProps) {
-  const { dispatch, flushSave } = useApp()
+  const { dispatch, flushSave, saveStatus, getData } = useApp()
   const { showToast } = useToast()
   const isEdit = mode === 'edit'
   const [initialDraft] = useState(loadDraft)
@@ -60,44 +56,17 @@ export function IdeaSheet({
   )
   const [showTags, setShowTags] = useState(isEdit || Boolean(initialDraft?.tags.length))
   const [restored, setRestored] = useState(!isEdit && Boolean(initialDraft))
+  const [deleteError, setDeleteError] = useState<string | null>(null)
   const [aiOpen, setAiOpen] = useState(false)
   const [aiUndo, setAiUndo] = useState<string | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const latestText = useRef(text)
-  const latestIdea = useRef(idea)
-  const commitTimer = useRef<number | null>(null)
   const resizeFrame = useRef<number | null>(null)
-
-  latestText.current = text
-  latestIdea.current = idea
-
-  const clearCommitTimer = useCallback(() => {
-    if (commitTimer.current !== null) {
-      window.clearTimeout(commitTimer.current)
-      commitTimer.current = null
-    }
-  }, [])
-
-  const commit = useCallback(
-    (next: string) => {
-      const current = latestIdea.current
-      if (!current || !next.trim() || next === current.text) return
-      dispatch({ type: 'idea/update', id: current.id, patch: { text: next } })
-    },
-    [dispatch],
-  )
-
-  const scheduleCommit = useCallback(() => {
-    clearCommitTimer()
-    commitTimer.current = window.setTimeout(() => {
-      commitTimer.current = null
-      commit(latestText.current)
-    }, AUTOSAVE_MS)
-  }, [clearCommitTimer, commit])
+  const submitting = useRef(false)
 
   const applyHeight = useCallback(() => {
     const element = textareaRef.current
-    if (!element) return
+    if (!element || CSS.supports('field-sizing', 'content')) return
     element.style.height = 'auto'
     element.style.height = `${Math.min(element.scrollHeight, window.innerHeight * 0.52)}px`
   }, [])
@@ -105,7 +74,7 @@ export function IdeaSheet({
   // Keystrokes only schedule one measurement per frame instead of forcing a
   // synchronous layout inside every input event.
   const queueResize = useCallback(() => {
-    if (resizeFrame.current !== null) return
+    if (resizeFrame.current !== null || CSS.supports('field-sizing', 'content')) return
     resizeFrame.current = window.requestAnimationFrame(() => {
       resizeFrame.current = null
       applyHeight()
@@ -136,8 +105,8 @@ export function IdeaSheet({
       return
     }
 
-    clearCommitTimer()
     setAiUndo(null)
+    setDeleteError(null)
 
     if (isEdit) {
       const nextText = idea?.text ?? ''
@@ -151,34 +120,27 @@ export function IdeaSheet({
       queueResize()
     }
 
-    // Re-sync only when opening or switching thoughts; typing stays local.
-    // The sheet is keyed by mode and thought id, so a new thought already
-    // mounts with its own text instead of editing the previous one's state.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, mode, idea?.id])
 
   useEffect(() => {
-    const onDataChanged = () => {
-      setText('')
-      latestText.current = ''
-      setTags([])
-      setShowTags(false)
-      setRestored(false)
+    if (!open || !isEdit || !idea || getData().ideas.find((item) => item.id === idea.id) !== idea) return
+    // Only synchronize the current store revision. A React render may still
+    // show an older published snapshot while the user has typed beyond it.
+    if (latestText.current.trim() && latestText.current !== idea.text) {
+      latestText.current = idea.text
+      setText(idea.text)
       setAiUndo(null)
-      setAiOpen(false)
-      clearCommitTimer()
-      clearDraft()
+      queueResize()
     }
-    window.addEventListener('shiyan:data-changed', onDataChanged)
-    return () => window.removeEventListener('shiyan:data-changed', onDataChanged)
-  }, [clearCommitTimer])
+    setTags(idea.tags)
+  }, [open, isEdit, idea, getData, queueResize])
 
   useEffect(
     () => () => {
-      clearCommitTimer()
-      if (resizeFrame.current !== null) window.cancelAnimationFrame(resizeFrame.current)
+        if (resizeFrame.current !== null) window.cancelAnimationFrame(resizeFrame.current)
     },
-    [clearCommitTimer],
+    [],
   )
 
   const reset = () => {
@@ -192,7 +154,8 @@ export function IdeaSheet({
     queueResize()
   }
 
-  const submit = () => {
+  const submit = async () => {
+    if (submitting.current) return
     const cleaned = text.trim()
     if (!cleaned) {
       textareaRef.current?.focus()
@@ -209,13 +172,20 @@ export function IdeaSheet({
       createdAt: now,
       updatedAt: now,
     }
-    dispatch({ type: 'idea/add', idea: nextIdea })
+    submitting.current = true
+    if (!dispatch({ type: 'idea/add', idea: nextIdea })) {
+      submitting.current = false
+      return
+    }
     reset()
     onCreated(nextIdea.id)
+    const saved = await flushSave()
+    submitting.current = false
+    if (!saved) return
     showToast('已收进念头', {
       actionLabel: '撤回',
       onAction: () => {
-        dispatch({ type: 'idea/delete', id: nextIdea.id })
+        if (!dispatch({ type: 'idea/undoAdd', idea: nextIdea })) return
         setText(cleaned)
         latestText.current = cleaned
         setTags(tags)
@@ -227,20 +197,12 @@ export function IdeaSheet({
     })
   }
 
-  const finishEditing = () => {
-    if (!isEdit) return
-    clearCommitTimer()
-    commit(latestText.current)
-    flushSave()
-    onClose()
+  const finishEditing = async () => {
+    if (await flushSave()) onClose()
   }
 
   const handleClose = () => {
-    if (isEdit) {
-      clearCommitTimer()
-      commit(latestText.current)
-      flushSave()
-    }
+    if (isEdit) void flushSave()
     onClose()
   }
 
@@ -251,14 +213,16 @@ export function IdeaSheet({
     setAiUndo(null)
     queueResize()
     persistDraft(next, tags)
-    if (isEdit) scheduleCommit()
+    if (isEdit && idea && next.trim()) {
+      dispatch({ type: 'idea/update', id: idea.id, patch: { text: next, tags } })
+    }
   }
 
   const updateTags = (next: string[]) => {
     setTags(next)
     persistDraft(text, next)
     if (isEdit && idea) {
-      dispatch({ type: 'idea/update', id: idea.id, patch: { tags: next } })
+      dispatch({ type: 'idea/update', id: idea.id, patch: { tags: next, ...(latestText.current.trim() ? { text: latestText.current } : {}) } })
     }
   }
 
@@ -269,16 +233,15 @@ export function IdeaSheet({
     queueResize()
     persistDraft(previous, tags)
     if (isEdit && idea) {
-      clearCommitTimer()
-      dispatch({ type: 'idea/update', id: idea.id, patch: { text: previous } })
+        dispatch({ type: 'idea/update', id: idea.id, patch: { text: previous, tags } })
     }
   }
 
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
       event.preventDefault()
-      if (isEdit) finishEditing()
-      else submit()
+      if (isEdit) void finishEditing()
+      else void submit()
     }
   }
 
@@ -323,7 +286,7 @@ export function IdeaSheet({
                   type="button"
                   className={activeIdea.pinned ? 'detail-tool is-active' : 'detail-tool'}
                   onClick={() =>
-                    dispatch({ type: 'idea/togglePin', id: activeIdea.id, now: Date.now() })
+                    dispatch({ type: 'idea/togglePin', id: activeIdea.id })
                   }
                 >
                   <Icon name="pin" size={16} filled={activeIdea.pinned} />
@@ -332,7 +295,7 @@ export function IdeaSheet({
                 <button
                   type="button"
                   className="detail-tool detail-tool-danger"
-                  onClick={() => onRequestDelete(activeIdea)}
+                  onClick={async () => setDeleteError(await onRequestDelete(activeIdea))}
                 >
                   <Icon name="trash" size={16} />
                   删除
@@ -399,12 +362,6 @@ export function IdeaSheet({
           value={text}
           onChange={(event) => updateText(event.target.value)}
           onKeyDown={onKeyDown}
-          onBlur={() => {
-            if (!isEdit) return
-            clearCommitTimer()
-            commit(latestText.current)
-            queueResize()
-          }}
           placeholder={
             isEdit ? '把这一念写完整…' : '此刻在想什么？先写下来，不求完整。'
           }
@@ -444,6 +401,15 @@ export function IdeaSheet({
           </div>
         ) : null}
 
+        {deleteError ? <p className="field-error" role="alert">{deleteError}</p> : null}
+
+        {isEdit && (saveStatus === 'failed' || saveStatus === 'conflict') ? (
+          <p className="field-hint field-hint-warn" role="alert">
+            <Icon name="alert" size={13} />
+            {saveStatus === 'conflict' ? '另一页已保存新版。关闭详情后可以导出这里的编辑。' : '尚未保存。再次点击完成可以重试。'}
+          </p>
+        ) : null}
+
         {isEdit && !text.trim() ? (
           <p className="field-hint field-hint-warn">
             <Icon name="alert" size={13} />
@@ -455,6 +421,7 @@ export function IdeaSheet({
       <AiPolishSheet
         open={aiOpen}
         onClose={() => setAiOpen(false)}
+        onAfterClose={() => { if (open) textareaRef.current?.focus({ preventScroll: true }) }}
         sourceText={text}
         contextLabel={isEdit ? '润色这则已经收下的念头' : '润色正在写的这则念头'}
         onApply={(next) => {
@@ -466,12 +433,9 @@ export function IdeaSheet({
           queueResize()
           persistDraft(next, tags)
           if (isEdit && activeIdea) {
-            clearCommitTimer()
-            dispatch({ type: 'idea/update', id: activeIdea.id, patch: { text: next } })
+                    dispatch({ type: 'idea/update', id: activeIdea.id, patch: { text: next, tags } })
           }
-          // Wait for the polish sheet's close animation to leave the top
-          // layer; a modal traps focus until its dialog is gone.
-          window.setTimeout(() => textareaRef.current?.focus(), 260)
+
         }}
       />
     </>

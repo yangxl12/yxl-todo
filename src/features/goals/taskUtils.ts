@@ -1,5 +1,5 @@
-import type { Goal, Priority, Task } from '../../lib/types'
-import { toDateKey } from '../../lib/date'
+import type { Goal, GoalSort, Priority, Task } from '../../lib/types'
+import { parseDateKey, toDateKey } from '../../lib/date'
 
 const PRIORITY_RANK: Record<Priority, number> = { high: 0, normal: 1, low: 2 }
 
@@ -65,8 +65,8 @@ export interface DueTaskEntry {
   task: Task
 }
 
-export function getTodayEntries(goals: Goal[]): DueTaskEntry[] {
-  const today = toDateKey()
+export function getTodayEntries(goals: Goal[], day: Date): DueTaskEntry[] {
+  const today = toDateKey(day)
   const entries: DueTaskEntry[] = []
   for (const goal of goals) {
     if (!goal.tasks.length) continue
@@ -76,7 +76,7 @@ export function getTodayEntries(goals: Goal[]): DueTaskEntry[] {
     }
     if (open === 0) continue
     for (const task of goal.tasks) {
-      if (!task.done && task.dueDate && task.dueDate <= today) {
+      if (!task.done && task.dueDate && task.dueDate <= today && parseDateKey(task.dueDate)) {
         entries.push({ goal, task })
       }
     }
@@ -87,4 +87,45 @@ export function getTodayEntries(goals: Goal[]): DueTaskEntry[] {
     return PRIORITY_RANK[a.task.priority] - PRIORITY_RANK[b.task.priority]
   })
   return entries
+}
+
+function sortActiveGoals(
+  goals: Goal[],
+  sort: GoalSort,
+  stats: Map<string, GoalStats>,
+): Goal[] {
+  const progressOf = (goal: Goal) => stats.get(goal.id)?.progress ?? 0
+  return [...goals].sort((a, b) => {
+    if (sort === 'due') {
+      if (a.dueDate !== b.dueDate) {
+        if (!a.dueDate) return 1
+        if (!b.dueDate) return -1
+        return a.dueDate.localeCompare(b.dueDate)
+      }
+      return b.createdAt - a.createdAt
+    }
+    if (sort === 'progress') {
+      const diff = progressOf(b) - progressOf(a)
+      if (diff !== 0) return diff
+      return b.createdAt - a.createdAt
+    }
+    return b.createdAt - a.createdAt
+  })
+}
+
+export function groupGoals(goals: Goal[], sort: GoalSort) {
+  const active: Goal[] = []
+  const completed: Goal[] = []
+  const stats = new Map<string, GoalStats>()
+  const completion = new Map<string, number>()
+  for (const goal of goals) {
+    const entry = goalStats(goal)
+    stats.set(goal.id, entry)
+    if (entry.complete) {
+      completed.push(goal)
+      completion.set(goal.id, latestCompletion(goal))
+    } else active.push(goal)
+  }
+  completed.sort((a, b) => (completion.get(b.id) ?? 0) - (completion.get(a.id) ?? 0))
+  return { active: sortActiveGoals(active, sort, stats), completed }
 }

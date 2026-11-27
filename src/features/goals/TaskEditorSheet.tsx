@@ -1,3 +1,4 @@
+import { useCalendarDay } from '../../lib/calendarDay'
 import { useRef, useState } from 'react'
 import { Button } from '../../components/Button'
 import { Icon } from '../../components/Icon'
@@ -6,6 +7,7 @@ import { DOMAIN_MAP, PRIORITIES } from '../../lib/domains'
 import type { Goal, Priority, Task } from '../../lib/types'
 import { addDays, formatDueDate, toDateKey } from '../../lib/date'
 import { cx } from '../../lib/utils'
+import { useApp } from '../../lib/store'
 
 interface TaskEditorSheetProps {
   open: boolean
@@ -13,7 +15,7 @@ interface TaskEditorSheetProps {
   task: Task | null
   onClose: () => void
   onSave: (values: { title: string; dueDate: string | null; priority: Priority }) => void
-  onRequestDelete: (goal: Goal, task: Task) => void
+  onRequestDelete: (goal: Goal, task: Task) => Promise<string | null>
 }
 
 export function TaskEditorSheet({
@@ -28,8 +30,11 @@ export function TaskEditorSheet({
   const [title, setTitle] = useState(task?.title ?? '')
   const [dueDate, setDueDate] = useState<string | null>(task?.dueDate ?? null)
   const [priority, setPriority] = useState<Priority>(task?.priority ?? 'normal')
+  const today = useCalendarDay()
   const [error, setError] = useState('')
   const titleRef = useRef<HTMLInputElement>(null)
+  const initial = useRef(task)
+  const { getData } = useApp()
 
   if (!goal || !task) return null
 
@@ -37,6 +42,13 @@ export function TaskEditorSheet({
     if (!title.trim()) {
       setError('这一步总得有个名字。')
       titleRef.current?.focus()
+      return
+    }
+    const original = initial.current
+    const saved = getData().goals.find((item) => item.id === goal.id)?.tasks.find((item) => item.id === task.id)
+    if (!original || !saved || saved.title !== original.title ||
+        saved.dueDate !== original.dueDate || saved.priority !== original.priority) {
+      setError('这一步已在另一页改动。可以复制当前输入，再打开最新版。')
       return
     }
     onSave({ title: title.trim(), dueDate, priority })
@@ -53,7 +65,7 @@ export function TaskEditorSheet({
       initialFocusRef={titleRef}
       footer={
         <div className="sheet-foot-split">
-          <Button variant="ghost" icon="trash" onClick={() => onRequestDelete(goal, task)}>
+          <Button variant="ghost" icon="trash" onClick={async () => setError(await onRequestDelete(goal, task) ?? '')}>
             删除
           </Button>
           <Button variant="primary" icon="check" onClick={handleSave}>
@@ -112,13 +124,13 @@ export function TaskEditorSheet({
             value={dueDate ?? ''}
             onChange={(event) => setDueDate(event.target.value || null)}
           />
-          <button type="button" className="mini-action" onClick={() => setDueDate(toDateKey())}>
+          <button type="button" className="mini-action" onClick={() => setDueDate(toDateKey(today))}>
             今天
           </button>
           <button
             type="button"
             className="mini-action"
-            onClick={() => setDueDate(toDateKey(addDays(new Date(), 1)))}
+            onClick={() => setDueDate(toDateKey(addDays(today, 1)))}
           >
             明天
           </button>
@@ -130,7 +142,7 @@ export function TaskEditorSheet({
         </div>
         <p className="field-hint">
           {dueDate
-            ? `会出现在 ${formatDueDate(dueDate)} 的优先清单里。`
+            ? `会出现在 ${formatDueDate(dueDate, today)} 的优先清单里。`
             : '不设日期也可以。它仍会留在这个目标里。'}
         </p>
       </div>

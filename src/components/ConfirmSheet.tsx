@@ -1,11 +1,11 @@
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Button } from './Button'
 import { Sheet } from './Modal'
 
 interface ConfirmSheetProps {
   open: boolean
   onClose: () => void
-  onConfirm: () => void
+  onConfirm: () => boolean | void | Promise<boolean | void>
   title: string
   description: ReactNode
   confirmLabel: string
@@ -31,6 +31,21 @@ export function ConfirmSheet({
   cancelLabel = '先不',
   tone = 'danger',
 }: ConfirmSheetProps) {
+  const [busy, setBusy] = useState(false)
+  const confirming = useRef(false)
+
+  const confirm = async () => {
+    if (confirming.current) return
+    confirming.current = true
+    setBusy(true)
+    try {
+      if (await onConfirm() !== false) onClose()
+    } finally {
+      confirming.current = false
+      setBusy(false)
+    }
+  }
+
   const snapshot = useRef<ConfirmSnapshot>({
     title,
     description,
@@ -48,21 +63,19 @@ export function ConfirmSheet({
   return (
     <Sheet
       open={open}
-      onClose={onClose}
+      onClose={() => { if (!confirming.current) onClose() }}
       title={display.title}
       titleId="confirm-sheet-title"
       panelClassName="sheet-small"
       footer={
         <>
-          <Button variant="ghost" onClick={onClose}>
+          <Button variant="ghost" onClick={onClose} disabled={busy}>
             {display.cancelLabel}
           </Button>
           <Button
             variant={display.tone === 'danger' ? 'danger' : 'primary'}
-            onClick={() => {
-              onConfirm()
-              onClose()
-            }}
+            disabled={busy}
+            onClick={confirm}
           >
             {display.confirmLabel}
           </Button>

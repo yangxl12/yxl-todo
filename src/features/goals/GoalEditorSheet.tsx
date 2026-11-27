@@ -1,3 +1,4 @@
+import { useCalendarDay } from '../../lib/calendarDay'
 import { useRef, useState } from 'react'
 import { Button } from '../../components/Button'
 import { Icon } from '../../components/Icon'
@@ -6,6 +7,7 @@ import { DOMAINS } from '../../lib/domains'
 import type { DomainKey, Goal } from '../../lib/types'
 import { toDateKey, addDays, formatDueDate } from '../../lib/date'
 import { cx } from '../../lib/utils'
+import { useApp } from '../../lib/store'
 
 interface GoalEditorSheetProps {
   open: boolean
@@ -14,7 +16,7 @@ interface GoalEditorSheetProps {
   initialDomain?: DomainKey
   onClose: () => void
   onSave: (values: { title: string; why: string; domain: DomainKey; dueDate: string | null }) => void
-  onRequestDelete?: (goal: Goal) => void
+  onRequestDelete?: (goal: Goal) => Promise<string | null>
 }
 
 export function GoalEditorSheet({
@@ -36,8 +38,11 @@ export function GoalEditorSheet({
   const [dueDate, setDueDate] = useState<string | null>(
     mode === 'edit' && goal ? goal.dueDate : null,
   )
+  const today = useCalendarDay()
   const [error, setError] = useState('')
   const titleRef = useRef<HTMLInputElement>(null)
+  const initial = useRef(goal)
+  const { getData } = useApp()
 
   const handleSave = () => {
     const cleaned = title.trim()
@@ -46,10 +51,19 @@ export function GoalEditorSheet({
       titleRef.current?.focus()
       return
     }
+    const original = initial.current
+    if (mode === 'edit' && original) {
+      const saved = getData().goals.find((item) => item.id === original.id)
+      if (!saved || saved.title !== original.title || saved.why !== original.why ||
+          saved.domain !== original.domain || saved.dueDate !== original.dueDate) {
+        setError('这个目标已在另一页改动。可以复制当前输入，再打开最新版。')
+        return
+      }
+    }
     onSave({ title: cleaned, why: why.trim(), domain, dueDate })
   }
 
-  const tomorrow = toDateKey(addDays(new Date(), 1))
+  const tomorrow = toDateKey(addDays(today, 1))
 
   return (
     <Sheet
@@ -63,7 +77,7 @@ export function GoalEditorSheet({
       footer={
         <div className="sheet-foot-split">
           {mode === 'edit' && goal && onRequestDelete ? (
-            <Button variant="ghost" icon="trash" onClick={() => onRequestDelete(goal)}>
+            <Button variant="ghost" icon="trash" onClick={async () => setError(await onRequestDelete(goal) ?? '')}>
               删除目标
             </Button>
           ) : (
@@ -133,7 +147,7 @@ export function GoalEditorSheet({
           <button
             type="button"
             className="mini-action"
-            onClick={() => setDueDate(toDateKey())}
+            onClick={() => setDueDate(toDateKey(today))}
           >
             今天
           </button>
@@ -151,7 +165,7 @@ export function GoalEditorSheet({
           ) : null}
         </div>
         <p className="field-hint">
-          {dueDate ? `这件事想在 ${formatDueDate(dueDate)} 之前收口。` : '不设期限也可以，先把第一步走起来。'}
+          {dueDate ? `这件事想在 ${formatDueDate(dueDate, today)} 之前收口。` : '不设期限也可以，先把第一步走起来。'}
         </p>
       </div>
 

@@ -1,7 +1,5 @@
 import { Icon, type IconName } from './Icon'
 import { TABS, type TabKey } from '../lib/useHashRoute'
-import { getDailyFireIndex, FIRE_ITEMS } from '../lib/fireContent'
-import { daysSinceEpoch } from '../lib/date'
 import { Brand } from './Brand'
 import { cx } from '../lib/utils'
 
@@ -40,19 +38,15 @@ export function BottomNav({
   )
 }
 
-function dailyFragment() {
-  return FIRE_ITEMS[getDailyFireIndex(daysSinceEpoch())]
-}
-
 export function SideRail({
   active,
   onNavigate,
+  dailyFragment,
 }: {
+  dailyFragment: string
   active: TabKey
   onNavigate: (tab: TabKey) => void
 }) {
-  const daily = dailyFragment()
-
   return (
     <aside className="side-rail">
       <div>
@@ -84,7 +78,7 @@ export function SideRail({
           今日一焰
         </p>
         <p className="rail-ember-text">
-          {daily.kind === 'quote' ? daily.body : daily.title}
+          {dailyFragment}
         </p>
         <button type="button" className="rail-ember-link" onClick={() => onNavigate('fire')}>
           续一簇火
